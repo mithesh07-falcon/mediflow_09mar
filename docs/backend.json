@@ -1,0 +1,972 @@
+
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the system, acting as a link to an external authentication system. This entity does not store authentication credentials like passwords, emails, or phone numbers directly.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity. This ID would typically be provided by an external authentication system."
+        },
+        "userRole": {
+          "type": "string",
+          "description": "The primary role of the user within the MediFlow application (e.g., 'Patient', 'Doctor', 'Pharmacist', 'Admin')."
+        }
+      },
+      "required": [
+        "id",
+        "userRole"
+      ]
+    },
+    "Family": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Family",
+      "type": "object",
+      "description": "Represents a group of patient profiles managed by a single user, typically for multi-family profile management.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Family entity."
+        },
+        "familyName": {
+          "type": "string",
+          "description": "The name of the family group (e.g., 'Smith Family')."
+        },
+        "ownerUserId": {
+          "type": "string",
+          "description": "Reference to the User entity who is the primary manager of this family profile. (Relationship: User 1:N Family)"
+        },
+        "patientProfileIds": {
+          "type": "array",
+          "description": "An array of references to PatientProfile entities that belong to this family. (Relationship: Family N:N PatientProfile)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "familyName",
+        "ownerUserId"
+      ]
+    },
+    "PatientProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PatientProfile",
+      "type": "object",
+      "description": "Represents an individual patient, potentially part of a family or managed by a caretaker.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PatientProfile entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User entity associated with this patient profile. (Relationship: User 1:1 PatientProfile)"
+        },
+        "familyId": {
+          "type": "string",
+          "description": "Optional reference to the Family entity this patient profile belongs to. (Relationship: Family 1:N PatientProfile)"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the patient."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the patient."
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "description": "The patient's date of birth.",
+          "format": "date"
+        },
+        "gender": {
+          "type": "string",
+          "description": "The patient's gender."
+        },
+        "caretakerUserId": {
+          "type": "string",
+          "description": "Optional reference to the User entity who manages this patient's profile (e.g., for children or elderly members). (Relationship: User 1:N PatientProfile)"
+        },
+        "emergencyContactName": {
+          "type": "string",
+          "description": "The name of the emergency contact person for the patient."
+        },
+        "emergencyContactNumber": {
+          "type": "string",
+          "description": "The phone number of the emergency contact person for the patient."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "firstName",
+        "lastName",
+        "dateOfBirth",
+        "gender"
+      ]
+    },
+    "DoctorProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "DoctorProfile",
+      "type": "object",
+      "description": "Represents a registered doctor with their professional details and availability.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the DoctorProfile entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User entity associated with this doctor profile. (Relationship: User 1:1 DoctorProfile)"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the doctor."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the doctor."
+        },
+        "specialization": {
+          "type": "string",
+          "description": "The medical specialization of the doctor (e.g., 'Cardiologist', 'Pediatrician')."
+        },
+        "medicalLicenseNumber": {
+          "type": "string",
+          "description": "The doctor's medical license number."
+        },
+        "clinicName": {
+          "type": "string",
+          "description": "The name of the clinic or hospital where the doctor practices."
+        },
+        "clinicAddress": {
+          "type": "string",
+          "description": "The address of the doctor's clinic or hospital."
+        },
+        "availabilitySlotIds": {
+          "type": "array",
+          "description": "An array of references to DoctorAvailabilitySlot entities indicating when the doctor is available for appointments. (Relationship: DoctorProfile N:N DoctorAvailabilitySlot)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "firstName",
+        "lastName",
+        "specialization",
+        "medicalLicenseNumber",
+        "clinicName",
+        "clinicAddress"
+      ]
+    },
+    "PharmacistProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PharmacistProfile",
+      "type": "object",
+      "description": "Represents a registered pharmacist with their professional and pharmacy details.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PharmacistProfile entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User entity associated with this pharmacist profile. (Relationship: User 1:1 PharmacistProfile)"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the pharmacist."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the pharmacist."
+        },
+        "pharmacyName": {
+          "type": "string",
+          "description": "The name of the pharmacy where the pharmacist works."
+        },
+        "pharmacyAddress": {
+          "type": "string",
+          "description": "The address of the pharmacy."
+        },
+        "licenseNumber": {
+          "type": "string",
+          "description": "The pharmacist's professional license number."
+        },
+        "inventoryItemIds": {
+          "type": "array",
+          "description": "An array of references to MedicineInventoryItem entities managed by this pharmacist. (Relationship: PharmacistProfile N:N MedicineInventoryItem)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "firstName",
+        "lastName",
+        "pharmacyName",
+        "pharmacyAddress",
+        "licenseNumber"
+      ]
+    },
+    "MedicalHistory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MedicalHistory",
+      "type": "object",
+      "description": "Stores detailed medical history for a specific patient profile.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the MedicalHistory entity."
+        },
+        "patientProfileId": {
+          "type": "string",
+          "description": "Reference to the PatientProfile this medical history belongs to. (Relationship: PatientProfile 1:N MedicalHistory)"
+        },
+        "conditionName": {
+          "type": "string",
+          "description": "The name of a medical condition or diagnosis."
+        },
+        "diagnosisDate": {
+          "type": "string",
+          "description": "The date when the condition was diagnosed.",
+          "format": "date"
+        },
+        "treatmentDetails": {
+          "type": "string",
+          "description": "Details about the treatment received for the condition."
+        },
+        "isChronic": {
+          "type": "boolean",
+          "description": "Indicates if the condition is chronic."
+        },
+        "allergies": {
+          "type": "array",
+          "description": "A list of known allergies for the patient.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pastProcedures": {
+          "type": "array",
+          "description": "A list of past medical procedures or surgeries for the patient.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional relevant notes about the medical history."
+        }
+      },
+      "required": [
+        "id",
+        "patientProfileId",
+        "conditionName",
+        "diagnosisDate",
+        "treatmentDetails",
+        "isChronic",
+        "allergies",
+        "pastProcedures"
+      ]
+    },
+    "SymptomEntry": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SymptomEntry",
+      "type": "object",
+      "description": "Records patient-entered symptoms for AI-based doctor recommendations.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SymptomEntry entity."
+        },
+        "patientProfileId": {
+          "type": "string",
+          "description": "Reference to the PatientProfile who entered these symptoms. (Relationship: PatientProfile 1:N SymptomEntry)"
+        },
+        "symptomsDescription": {
+          "type": "string",
+          "description": "A detailed description of the symptoms reported by the patient."
+        },
+        "entryDate": {
+          "type": "string",
+          "description": "The date and time when the symptoms were entered.",
+          "format": "date-time"
+        },
+        "recommendedDoctorProfileIds": {
+          "type": "array",
+          "description": "An array of references to DoctorProfile entities recommended by the AI based on the symptoms. (Relationship: SymptomEntry N:N DoctorProfile)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "aiRecommendationNotes": {
+          "type": "string",
+          "description": "Any additional notes or rationale provided by the AI for the recommendation."
+        }
+      },
+      "required": [
+        "id",
+        "patientProfileId",
+        "symptomsDescription",
+        "entryDate"
+      ]
+    },
+    "Appointment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Appointment",
+      "type": "object",
+      "description": "Records a scheduled consultation between a patient and a doctor.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Appointment entity."
+        },
+        "patientProfileId": {
+          "type": "string",
+          "description": "Reference to the PatientProfile who booked the appointment. (Relationship: PatientProfile 1:N Appointment)"
+        },
+        "doctorProfileId": {
+          "type": "string",
+          "description": "Reference to the DoctorProfile with whom the appointment is booked. (Relationship: DoctorProfile 1:N Appointment)"
+        },
+        "doctorAvailabilitySlotId": {
+          "type": "string",
+          "description": "Reference to the specific DoctorAvailabilitySlot that was booked for this appointment. (Relationship: DoctorAvailabilitySlot 1:1 Appointment)"
+        },
+        "appointmentDateTime": {
+          "type": "string",
+          "description": "The exact date and time of the appointment.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the appointment (e.g., 'Scheduled', 'Completed', 'Cancelled', 'PendingPayment')."
+        },
+        "consultationFee": {
+          "type": "number",
+          "description": "The fee for the consultation."
+        },
+        "paymentTransactionId": {
+          "type": "string",
+          "description": "Optional reference to the PaymentTransaction entity related to this appointment's payment. (Relationship: PaymentTransaction 1:N Appointment)"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Any additional notes for the appointment."
+        }
+      },
+      "required": [
+        "id",
+        "patientProfileId",
+        "doctorProfileId",
+        "doctorAvailabilitySlotId",
+        "appointmentDateTime",
+        "status",
+        "consultationFee"
+      ]
+    },
+    "Prescription": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Prescription",
+      "type": "object",
+      "description": "Represents a digital prescription issued by a doctor for a patient.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Prescription entity."
+        },
+        "patientProfileId": {
+          "type": "string",
+          "description": "Reference to the PatientProfile for whom this prescription is issued. (Relationship: PatientProfile 1:N Prescription)"
+        },
+        "doctorProfileId": {
+          "type": "string",
+          "description": "Reference to the DoctorProfile who issued this prescription. (Relationship: DoctorProfile 1:N Prescription)"
+        },
+        "issueDate": {
+          "type": "string",
+          "description": "The date and time when the prescription was issued.",
+          "format": "date-time"
+        },
+        "prescriptionMedicationIds": {
+          "type": "array",
+          "description": "An array of references to PrescriptionMedication entities detailing each medicine in the prescription. (Relationship: Prescription N:N PrescriptionMedication)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "generalInstructions": {
+          "type": "string",
+          "description": "General instructions or advice from the doctor for the patient."
+        },
+        "isVerifiedByPharmacist": {
+          "type": "boolean",
+          "description": "Indicates if the prescription has been verified by a pharmacist for fulfillment."
+        },
+        "pharmacistProfileId": {
+          "type": "string",
+          "description": "Optional reference to the PharmacistProfile who verified this prescription. (Relationship: PharmacistProfile 1:N Prescription)"
+        },
+        "verificationDate": {
+          "type": "string",
+          "description": "The date and time when the prescription was verified by the pharmacist.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "patientProfileId",
+        "doctorProfileId",
+        "issueDate",
+        "prescriptionMedicationIds",
+        "isVerifiedByPharmacist"
+      ]
+    },
+    "PrescriptionMedication": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PrescriptionMedication",
+      "type": "object",
+      "description": "Details a single medication item within a prescription, including dosage and schedule information.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PrescriptionMedication entity."
+        },
+        "prescriptionId": {
+          "type": "string",
+          "description": "Reference to the Prescription this medication item belongs to. (Relationship: Prescription 1:N PrescriptionMedication)"
+        },
+        "medicineName": {
+          "type": "string",
+          "description": "The name of the prescribed medicine."
+        },
+        "dosageValue": {
+          "type": "number",
+          "description": "The numerical value of the dosage (e.g., 250 for 250mg)."
+        },
+        "dosageUnit": {
+          "type": "string",
+          "description": "The unit of the dosage (e.g., 'mg', 'ml', 'tablet')."
+        },
+        "frequencyQuantity": {
+          "type": "number",
+          "description": "The number of times the medicine should be taken within a frequency unit (e.g., 2 times a day)."
+        },
+        "frequencyUnit": {
+          "type": "string",
+          "description": "The unit of frequency for medication intake (e.g., 'daily', 'weekly', 'hourly')."
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Specific instructions for taking the medicine (e.g., 'after food', 'empty stomach')."
+        },
+        "durationInDays": {
+          "type": "number",
+          "description": "The total duration for which the medicine should be taken, in days."
+        },
+        "startDate": {
+          "type": "string",
+          "description": "The start date for the medication course.",
+          "format": "date"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "The end date for the medication course.",
+          "format": "date"
+        }
+      },
+      "required": [
+        "id",
+        "prescriptionId",
+        "medicineName",
+        "dosageValue",
+        "dosageUnit",
+        "frequencyQuantity",
+        "frequencyUnit",
+        "instructions",
+        "durationInDays",
+        "startDate",
+        "endDate"
+      ]
+    },
+    "MedicationSchedule": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MedicationSchedule",
+      "type": "object",
+      "description": "Represents an automatically generated medication regimen for a patient, derived from a prescription medication.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the MedicationSchedule entity."
+        },
+        "patientProfileId": {
+          "type": "string",
+          "description": "Reference to the PatientProfile for whom this schedule is created. (Relationship: PatientProfile 1:N MedicationSchedule)"
+        },
+        "prescriptionMedicationId": {
+          "type": "string",
+          "description": "Reference to the PrescriptionMedication entity from which this schedule was generated. (Relationship: PrescriptionMedication 1:N MedicationSchedule)"
+        },
+        "medicineName": {
+          "type": "string",
+          "description": "The name of the medicine for this schedule."
+        },
+        "dosageDetails": {
+          "type": "string",
+          "description": "A descriptive string of the dosage (e.g., '250mg, after food')."
+        },
+        "scheduleTimes": {
+          "type": "array",
+          "description": "An array of time strings representing the daily scheduled times for taking the medicine (e.g., ['08:00', '14:00', '20:00']).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "startDate": {
+          "type": "string",
+          "description": "The start date for this medication schedule.",
+          "format": "date"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "The end date for this medication schedule.",
+          "format": "date"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Indicates if the medication reminders for this schedule are currently active."
+        },
+        "medicationAlertIds": {
+          "type": "array",
+          "description": "An array of references to individual MedicationAlert entities generated for this schedule. (Relationship: MedicationSchedule N:N MedicationAlert)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "complianceRecordIds": {
+          "type": "array",
+          "description": "An array of references to MedicationComplianceRecord entities tracking doses for this schedule. (Relationship: MedicationSchedule N:N MedicationComplianceRecord)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "patientProfileId",
+        "prescriptionMedicationId",
+        "medicineName",
+        "dosageDetails",
+        "scheduleTimes",
+        "startDate",
+        "endDate",
+        "isActive"
+      ]
+    },
+    "MedicationAlert": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MedicationAlert",
+      "type": "object",
+      "description": "Represents a specific instance of a medication reminder generated from a medication schedule.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the MedicationAlert entity."
+        },
+        "medicationScheduleId": {
+          "type": "string",
+          "description": "Reference to the MedicationSchedule that generated this alert. (Relationship: MedicationSchedule 1:N MedicationAlert)"
+        },
+        "alertTime": {
+          "type": "string",
+          "description": "The exact date and time when this specific alert was scheduled to fire.",
+          "format": "date-time"
+        },
+        "isSent": {
+          "type": "boolean",
+          "description": "Indicates if the notification for this alert has been sent."
+        },
+        "isTaken": {
+          "type": "boolean",
+          "description": "Indicates if the patient marked this dose as taken."
+        },
+        "takenTime": {
+          "type": "string",
+          "description": "The date and time when the dose was marked as taken (if applicable).",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the alert (e.g., 'Scheduled', 'Sent', 'Taken', 'Missed', 'Snoozed')."
+        },
+        "repeatedAlertCount": {
+          "type": "number",
+          "description": "The number of times this alert has been repeated due to the dose not being taken."
+        }
+      },
+      "required": [
+        "id",
+        "medicationScheduleId",
+        "alertTime",
+        "isSent",
+        "isTaken",
+        "status",
+        "repeatedAlertCount"
+      ]
+    },
+    "MedicationComplianceRecord": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MedicationComplianceRecord",
+      "type": "object",
+      "description": "Tracks the compliance of a patient in taking a specific dose of medication at a scheduled time.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the MedicationComplianceRecord entity."
+        },
+        "medicationScheduleId": {
+          "type": "string",
+          "description": "Reference to the MedicationSchedule this compliance record is for. (Relationship: MedicationSchedule 1:N MedicationComplianceRecord)"
+        },
+        "patientProfileId": {
+          "type": "string",
+          "description": "Reference to the PatientProfile associated with this compliance record. (Relationship: PatientProfile 1:N MedicationComplianceRecord)"
+        },
+        "scheduledDoseTime": {
+          "type": "string",
+          "description": "The exact date and time the medication dose was scheduled to be taken.",
+          "format": "date-time"
+        },
+        "actualTakenTime": {
+          "type": "string",
+          "description": "The actual date and time the medication dose was marked as taken, if applicable.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The compliance status for this dose (e.g., 'Taken', 'Missed', 'Skipped', 'Pending')."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Any additional notes or reasons for missed/skipped doses."
+        }
+      },
+      "required": [
+        "id",
+        "medicationScheduleId",
+        "patientProfileId",
+        "scheduledDoseTime",
+        "status"
+      ]
+    },
+    "Bill": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Bill",
+      "type": "object",
+      "description": "Records financial bills generated for patients, such as consultation or pharmacy bills.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Bill entity."
+        },
+        "patientProfileId": {
+          "type": "string",
+          "description": "Reference to the PatientProfile to whom this bill is issued. (Relationship: PatientProfile 1:N Bill)"
+        },
+        "issuerType": {
+          "type": "string",
+          "description": "The type of entity that issued the bill (e.g., 'Doctor', 'Pharmacist')."
+        },
+        "issuerProfileId": {
+          "type": "string",
+          "description": "Reference to the DoctorProfile or PharmacistProfile that issued this bill, depending on 'issuerType'. (Relationship: DoctorProfile/PharmacistProfile 1:N Bill)"
+        },
+        "billType": {
+          "type": "string",
+          "description": "The type of the bill (e.g., 'Consultation', 'Pharmacy', 'Other')."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The total amount of the bill."
+        },
+        "currency": {
+          "type": "string",
+          "description": "The currency of the bill amount (e.g., 'USD', 'INR')."
+        },
+        "issueDate": {
+          "type": "string",
+          "description": "The date and time when the bill was issued.",
+          "format": "date-time"
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "The due date for the bill payment.",
+          "format": "date"
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description or summary of the bill."
+        },
+        "paymentTransactionId": {
+          "type": "string",
+          "description": "Optional reference to the PaymentTransaction entity if this bill has been paid. (Relationship: PaymentTransaction 1:N Bill)"
+        },
+        "status": {
+          "type": "string",
+          "description": "The payment status of the bill (e.g., 'Unpaid', 'Paid', 'PartiallyPaid', 'Cancelled')."
+        }
+      },
+      "required": [
+        "id",
+        "patientProfileId",
+        "issuerType",
+        "issuerProfileId",
+        "billType",
+        "amount",
+        "currency",
+        "issueDate",
+        "status"
+      ]
+    },
+    "PaymentTransaction": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PaymentTransaction",
+      "type": "object",
+      "description": "Records details of a financial transaction made by a patient within the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PaymentTransaction entity."
+        },
+        "patientProfileId": {
+          "type": "string",
+          "description": "Reference to the PatientProfile who initiated the payment. (Relationship: PatientProfile 1:N PaymentTransaction)"
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount of money transacted."
+        },
+        "currency": {
+          "type": "string",
+          "description": "The currency of the transaction (e.g., 'USD', 'INR')."
+        },
+        "transactionDate": {
+          "type": "string",
+          "description": "The date and time when the transaction occurred.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the transaction (e.g., 'Pending', 'Completed', 'Failed', 'Refunded')."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "The method used for the payment (e.g., 'Credit Card', 'UPI', 'Wallet')."
+        },
+        "relatedBillId": {
+          "type": "string",
+          "description": "Optional reference to the Bill entity that this payment transaction is settling. (Relationship: Bill 1:1 PaymentTransaction)"
+        },
+        "transactionReference": {
+          "type": "string",
+          "description": "A unique reference ID provided by the payment gateway or system."
+        }
+      },
+      "required": [
+        "id",
+        "patientProfileId",
+        "amount",
+        "currency",
+        "transactionDate",
+        "status",
+        "paymentMethod"
+      ]
+    },
+    "MedicineInventoryItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MedicineInventoryItem",
+      "type": "object",
+      "description": "Represents a single medicine item in a pharmacy's inventory, managed by a pharmacist.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the MedicineInventoryItem entity."
+        },
+        "pharmacistProfileId": {
+          "type": "string",
+          "description": "Reference to the PharmacistProfile who manages this inventory item. (Relationship: PharmacistProfile 1:N MedicineInventoryItem)"
+        },
+        "medicineName": {
+          "type": "string",
+          "description": "The commercial or generic name of the medicine."
+        },
+        "manufacturer": {
+          "type": "string",
+          "description": "The manufacturer of the medicine."
+        },
+        "batchNumber": {
+          "type": "string",
+          "description": "The batch number of the medicine stock."
+        },
+        "expiryDate": {
+          "type": "string",
+          "description": "The expiry date of the medicine batch.",
+          "format": "date"
+        },
+        "stockQuantity": {
+          "type": "number",
+          "description": "The current quantity of the medicine in stock."
+        },
+        "unitPrice": {
+          "type": "number",
+          "description": "The price per unit of the medicine."
+        },
+        "lastUpdated": {
+          "type": "string",
+          "description": "The date and time when the inventory item was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "pharmacistProfileId",
+        "medicineName",
+        "manufacturer",
+        "batchNumber",
+        "expiryDate",
+        "stockQuantity",
+        "unitPrice",
+        "lastUpdated"
+      ]
+    },
+    "DoctorAvailabilitySlot": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "DoctorAvailabilitySlot",
+      "type": "object",
+      "description": "Represents a specific time slot when a doctor is available for an appointment.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the DoctorAvailabilitySlot entity."
+        },
+        "doctorProfileId": {
+          "type": "string",
+          "description": "Reference to the DoctorProfile to whom this availability slot belongs. (Relationship: DoctorProfile 1:N DoctorAvailabilitySlot)"
+        },
+        "slotStartDateTime": {
+          "type": "string",
+          "description": "The start date and time of the availability slot.",
+          "format": "date-time"
+        },
+        "slotEndDateTime": {
+          "type": "string",
+          "description": "The end date and time of the availability slot.",
+          "format": "date-time"
+        },
+        "isBooked": {
+          "boolean": "Indicates if this slot has been booked for an appointment."
+        },
+        "bookedAppointmentId": {
+          "type": "string",
+          "description": "Optional reference to the Appointment entity that booked this slot, if 'isBooked' is true. (Relationship: Appointment 1:1 DoctorAvailabilitySlot)"
+        }
+      },
+      "required": [
+        "id",
+        "doctorProfileId",
+        "slotStartDateTime",
+        "slotEndDateTime",
+        "isBooked"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user-specific metadata and roles.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/patientProfiles/{patientProfileId}",
+        "definition": {
+          "entityName": "PatientProfile",
+          "schema": {
+            "$ref": "#/backend/entities/PatientProfile"
+          },
+          "description": "Represents an individual patient profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the owner user."
+            },
+            {
+              "name": "patientProfileId",
+              "description": "The ID for the patient profile."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/doctors/{doctorProfileId}",
+        "definition": {
+          "entityName": "DoctorProfile",
+          "schema": {
+            "$ref": "#/backend/entities/DoctorProfile"
+          },
+          "description": "Professional doctor profiles.",
+          "params": [
+            {
+              "name": "doctorProfileId",
+              "description": "The ID for the doctor profile."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/appointments/{appointmentId}",
+        "definition": {
+          "entityName": "Appointment",
+          "schema": {
+            "$ref": "#/backend/entities/Appointment"
+          },
+          "description": "Scheduled medical consultations.",
+          "params": [
+            {
+              "name": "appointmentId",
+              "description": "The ID for the appointment."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

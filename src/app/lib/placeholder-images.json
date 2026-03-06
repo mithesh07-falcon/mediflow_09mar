@@ -1,0 +1,22 @@
+{
+  "placeholderImages": [
+    {
+      "id": "hero-doctor",
+      "description": "Professional doctor smiling",
+      "imageUrl": "https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=1000",
+      "imageHint": "doctor hospital"
+    },
+    {
+      "id": "family-health",
+      "description": "Happy family outdoors",
+      "imageUrl": "https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1000",
+      "imageHint": "happy family"
+    },
+    {
+      "id": "medical-tech",
+      "description": "Modern medical equipment",
+      "imageUrl": "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=1000",
+      "imageHint": "medical technology"
+    }
+  ]
+}

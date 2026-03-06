@@ -1,0 +1,90 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * MediFlow Security Rules
+     *
+     * Core Philosophy: 
+     * This ruleset enforces a multi-tenant medical platform model. Access is primarily 
+     * controlled through User Ownership (for personal data) and Shared Access (for 
+     * clinical records like Appointments and Prescriptions).
+     */
+
+    // --- Global Helper Functions ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isParticipant(data) {
+      return isSignedIn() && (
+        data.patientUserId == request.auth.uid || 
+        data.doctorUserId == request.auth.uid || 
+        data.pharmacistUserId == request.auth.uid ||
+        data.issuerUserId == request.auth.uid
+      );
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /patientProfiles/{patientProfileId} {
+        allow read, write: if isOwner(userId);
+
+        match /medicalHistories/{id} { allow read, write: if isOwner(userId); }
+        match /symptomEntries/{id} { allow read, write: if isOwner(userId); }
+        match /medicationSchedules/{id} { 
+          allow read, write: if isOwner(userId); 
+          match /alerts/{alertId} { allow read, write: if isOwner(userId); }
+          match /complianceRecords/{recordId} { allow read, write: if isOwner(userId); }
+        }
+      }
+
+      match /families/{familyId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /doctors/{doctorProfileId} {
+      allow read: if true;
+      allow write: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      match /availabilitySlots/{slotId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+      }
+    }
+
+    match /pharmacists/{pharmacistProfileId} {
+      allow read: if true;
+      allow write: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /appointments/{appointmentId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /prescriptions/{prescriptionId} {
+      allow read, write: if isSignedIn();
+      match /medications/{medId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    match /bills/{billId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /paymentTransactions/{transactionId} {
+      allow read, write: if isSignedIn() && resource.data.patientUserId == request.auth.uid;
+    }
+  }
+}
