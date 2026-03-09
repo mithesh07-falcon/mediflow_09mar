@@ -1,5 +1,6 @@
-
 "use client";
+
+import { addDays, format } from "date-fns";
 
 import { useState, useEffect } from "react";
 import { SidebarNav } from "@/components/layout/SidebarNav";
@@ -8,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -28,6 +36,37 @@ interface MedicationItem {
    dosage: string;
    frequency: string;
    duration: string;
+   courseDays: number;
+   courseEndDate: string;
+   timeLabel: "Morning" | "Afternoon" | "Evening" | "Night";
+   scheduledHour: number;
+   scheduledMinute: number;
+}
+
+interface MedTimeSlot {
+   label: string;   // e.g. "Morning"
+   display: string; // e.g. "Morning (8 AM)"
+   hour: number;
+   minute: number;
+}
+
+// Default slots — overridden by admin config if present
+const DEFAULT_MED_TIME_SLOTS: MedTimeSlot[] = [
+   { label: "Morning", display: "Morning (8 AM)", hour: 8, minute: 0 },
+   { label: "Afternoon", display: "Afternoon (1 PM)", hour: 13, minute: 0 },
+   { label: "Evening", display: "Evening (6 PM)", hour: 18, minute: 0 },
+   { label: "Night", display: "Night (9 PM)", hour: 21, minute: 0 },
+];
+
+function loadMedTimeSlots(): MedTimeSlot[] {
+   try {
+      const saved = localStorage.getItem("mediflow_med_time_slots");
+      if (saved) {
+         const parsed = JSON.parse(saved);
+         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+   } catch { }
+   return DEFAULT_MED_TIME_SLOTS;
 }
 
 export default function DiagnosisPage() {
@@ -41,8 +80,12 @@ export default function DiagnosisPage() {
    const [patientConsent, setPatientConsent] = useState(false);
    const [loading, setLoading] = useState(false);
    const [patientInfo, setPatientInfo] = useState<any>(null);
+   const [medTimeSlots, setMedTimeSlots] = useState<MedTimeSlot[]>(DEFAULT_MED_TIME_SLOTS);
 
    useEffect(() => {
+      // Load admin-configured medication time slots
+      setMedTimeSlots(loadMedTimeSlots());
+
       const savedAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
       const appointment = savedAppts.find((a: any) => String(a.id) === String(patientId));
       if (appointment) {
@@ -62,13 +105,44 @@ export default function DiagnosisPage() {
          toast({ variant: "destructive", title: "Wait!", description: "You must enter a diagnosis before adding medicines." });
          return;
       }
-      setMeds([...meds, { id: Date.now().toString(), name: "", dosage: "", frequency: "", duration: "7 days" }]);
+      const firstSlot = medTimeSlots[0] || DEFAULT_MED_TIME_SLOTS[0];
+      setMeds([...meds, {
+         id: Date.now().toString(),
+         name: "",
+         dosage: "",
+         frequency: "Once Daily",
+         duration: "7 days",
+         courseDays: 7,
+         courseEndDate: format(addDays(new Date(), 7), "MMM d, yyyy"),
+         timeLabel: firstSlot.label as any,
+         scheduledHour: firstSlot.hour,
+         scheduledMinute: firstSlot.minute
+      }]);
    };
 
    const removeMed = (id: string) => setMeds(meds.filter(m => m.id !== id));
 
-   const updateMed = (id: string, field: keyof MedicationItem, value: string) => {
-      setMeds(meds.map(m => m.id === id ? { ...m, [field]: value } : m));
+   const updateMed = (id: string, field: keyof MedicationItem, value: any) => {
+      setMeds(meds.map(m => {
+         if (m.id === id) {
+            const updated = { ...m, [field]: value };
+            if (field === 'timeLabel') {
+               // Find the matching slot from admin-configured slots
+               const slot = medTimeSlots.find(s => s.label === value);
+               if (slot) {
+                  updated.scheduledHour = slot.hour;
+                  updated.scheduledMinute = slot.minute;
+               }
+            }
+            if (field === 'courseDays') {
+               const days = parseInt(value) || 0;
+               updated.courseEndDate = format(addDays(new Date(), days), "MMM d, yyyy");
+               updated.duration = `${days} days`;
+            }
+            return updated;
+         }
+         return m;
+      }));
    };
 
    const handleSubmit = () => {
@@ -84,16 +158,17 @@ export default function DiagnosisPage() {
 
       setLoading(true);
 
-      setTimeout(() => {
+      setTimeout(async () => {
          const savedPrescriptions = JSON.parse(localStorage.getItem("mediflow_prescriptions") || "[]");
+         const doctorUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
 
          const newPrescription = {
             id: `RX-${Date.now()}`,
             patientId,
             patientName: patientInfo?.name || "Unknown",
             date: new Date().toLocaleDateString(),
-            doctorEmail: JSON.parse(localStorage.getItem("mediflow_current_user") || "{}").email,
-            doctorName: JSON.parse(localStorage.getItem("mediflow_current_user") || "{}").firstName,
+            doctorEmail: doctorUser.email,
+            doctorName: doctorUser.firstName,
             notes: diagnosisNote,
             medications: meds,
             sentToPharmacy: sendToPharmacy,
@@ -102,12 +177,34 @@ export default function DiagnosisPage() {
 
          localStorage.setItem("mediflow_prescriptions", JSON.stringify([newPrescription, ...savedPrescriptions]));
 
+         // ── DATA INTEGRITY: Mark appointment as Completed ──────────────────
+         // 1. Update localStorage so doctor queue + patient schedule both reflect it
+         const savedAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
+         const updatedAppts = savedAppts.map((a: any) =>
+            String(a.id) === String(patientId) ? { ...a, status: "Completed", prescriptionId: newPrescription.id } : a
+         );
+         localStorage.setItem("mediflow_appointments", JSON.stringify(updatedAppts));
+
+         // 2. Sync to server-side appointments.json
+         try {
+            const token = btoa(JSON.stringify(doctorUser));
+            await fetch("/api/appointments/complete", {
+               method: "POST",
+               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+               body: JSON.stringify({ appointmentId: patientId, prescriptionId: newPrescription.id }),
+            });
+         } catch (e) {
+            // Non-blocking: localStorage is already updated
+            console.warn("Server sync for completion failed, localStorage updated only.", e);
+         }
+         // ──────────────────────────────────────────────────────────────────
+
          setLoading(false);
          toast({
-            title: "Prescription Issued",
-            description: `Digital records sent to Patient Profile ${sendToPharmacy ? 'and Pharmacy Hub' : ''}.`,
+            title: "✅ Prescription Issued & Appointment Completed",
+            description: `Digital records sent to Patient Profile ${sendToPharmacy ? "and Pharmacy Hub" : ""}. Appointment marked as Completed.`,
          });
-         router.push("/dashboard/doctor/patients");
+         router.push("/dashboard/doctor");
       }, 2000);
    };
 
@@ -184,48 +281,56 @@ export default function DiagnosisPage() {
 
                            <div className="space-y-3">
                               {meds.map((med) => (
-                                 <div key={med.id} className="grid grid-cols-12 gap-3 p-4 bg-muted/20 rounded-2xl border items-end">
+                                 <div key={med.id} className="grid grid-cols-12 gap-3 p-6 bg-muted/20 rounded-[2rem] border-2 items-end">
                                     <div className="col-span-3 space-y-1">
-                                       <Label className="text-[10px] uppercase">Drug Name</Label>
+                                       <Label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Drug Name</Label>
                                        <Input
-                                          className="rounded-lg h-10"
+                                          className="rounded-xl h-12 border-2"
                                           placeholder="e.g. Omeprazole"
                                           value={med.name}
                                           onChange={e => updateMed(med.id, 'name', e.target.value)}
                                        />
                                     </div>
                                     <div className="col-span-2 space-y-1">
-                                       <Label className="text-[10px] uppercase">Dosage</Label>
+                                       <Label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Dosage</Label>
                                        <Input
-                                          className="rounded-lg h-10"
+                                          className="rounded-xl h-12 border-2"
                                           placeholder="e.g. 20mg"
                                           value={med.dosage}
                                           onChange={e => updateMed(med.id, 'dosage', e.target.value)}
                                        />
                                     </div>
                                     <div className="col-span-3 space-y-1">
-                                       <Label className="text-[10px] uppercase">Frequency</Label>
-                                       <Input
-                                          className="rounded-lg h-10"
-                                          placeholder="e.g. Twice Daily"
-                                          value={med.frequency}
-                                          onChange={e => updateMed(med.id, 'frequency', e.target.value)}
-                                       />
+                                       <Label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Time Slot</Label>
+                                       <Select value={med.timeLabel} onValueChange={v => updateMed(med.id, 'timeLabel', v)}>
+                                          <SelectTrigger className="h-12 rounded-xl border-2">
+                                             <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent className="rounded-xl">
+                                             {medTimeSlots.map(slot => (
+                                                <SelectItem key={slot.label} value={slot.label}>
+                                                   {slot.display}
+                                                </SelectItem>
+                                             ))}
+                                          </SelectContent>
+                                       </Select>
                                     </div>
                                     <div className="col-span-3 space-y-1">
-                                       <Label className="text-[10px] uppercase flex items-center gap-1">
-                                          <Clock className="h-3 w-3" /> Duration
+                                       <Label className="text-[10px] uppercase font-bold text-slate-500 ml-1 flex items-center gap-1">
+                                          <Clock className="h-3 w-3" /> Duration (Days)
                                        </Label>
                                        <Input
-                                          className="rounded-lg h-10"
-                                          placeholder="7 days"
-                                          value={med.duration}
-                                          onChange={e => updateMed(med.id, 'duration', e.target.value)}
+                                          type="number"
+                                          className="rounded-xl h-12 border-2"
+                                          placeholder="7"
+                                          value={med.courseDays}
+                                          onChange={e => updateMed(med.id, 'courseDays', e.target.value)}
                                        />
+                                       <p className="text-[9px] text-primary font-bold pl-1 uppercase">Ends: {med.courseEndDate}</p>
                                     </div>
                                     <div className="col-span-1 flex justify-end">
-                                       <Button variant="ghost" size="icon" onClick={() => removeMed(med.id)} className="text-muted-foreground hover:text-destructive h-10 w-10">
-                                          <Trash2 className="h-4 w-4" />
+                                       <Button variant="ghost" size="icon" onClick={() => removeMed(med.id)} className="text-muted-foreground hover:text-destructive h-12 w-12 hover:bg-destructive/10 rounded-xl">
+                                          <Trash2 className="h-5 w-5" />
                                        </Button>
                                     </div>
                                  </div>

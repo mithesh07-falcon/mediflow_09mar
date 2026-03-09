@@ -48,17 +48,22 @@ export default function PharmacistDashboard() {
   const [isComplaining, setIsComplaining] = useState(false);
 
   useEffect(() => {
-    // Initialize Medicines if not exists
-    const savedMeds = localStorage.getItem("mediflow_medicines");
-    if (!savedMeds) {
-      localStorage.setItem("mediflow_medicines", JSON.stringify(MOCK_MEDICINES));
-      setInventory(MOCK_MEDICINES);
-    } else {
-      setInventory(JSON.parse(savedMeds));
-    }
+    const fetchMeds = async () => {
+      try {
+        const res = await fetch('/api/medicines');
+        const data = await res.json();
+        setInventory(data.medicines || []);
+      } catch (e) {
+        console.error("Failed to fetch medicines", e);
+      }
+    };
 
+    fetchMeds();
     fetchQueue();
-    const interval = setInterval(fetchQueue, 5000);
+    const interval = setInterval(() => {
+      fetchMeds();
+      fetchQueue();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -89,11 +94,12 @@ export default function PharmacistDashboard() {
     }, 1000);
   };
 
-  const handleDispense = () => {
+  const handleDispense = async () => {
     if (!activeOrder) return;
 
     const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-    const currentInventory = JSON.parse(localStorage.getItem("mediflow_medicines") || "[]");
+    // Ensure we have latest prices from inventory
+    const currentInventory = inventory;
 
     let totalBillAmount = 0;
     const itemizedBill: any[] = [];
@@ -105,21 +111,28 @@ export default function PharmacistDashboard() {
       );
 
       if (prescribedMatch) {
-        // Quantitiy simulation: Assume 10 units dispensed per RX
-        const qtyToDispense = 10;
+        const qtyToDispense = 10; // Simulation
+        const currentPrice = item.price; // Fetched from API
         itemizedBill.push({
           name: item.name,
           qty: qtyToDispense,
-          unitPrice: item.price,
-          total: item.price * qtyToDispense
+          unitPrice: currentPrice,
+          total: currentPrice * qtyToDispense
         });
-        totalBillAmount += (item.price * qtyToDispense);
+        totalBillAmount += (currentPrice * qtyToDispense);
+
+        // Update stock via API
+        fetch('/api/medicines', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'updateStock', id: item.id, stock: Math.max(0, item.stock - qtyToDispense) })
+        });
+
         return { ...item, stock: Math.max(0, item.stock - qtyToDispense) };
       }
       return item;
     });
 
-    localStorage.setItem("mediflow_medicines", JSON.stringify(updatedInventory));
     setInventory(updatedInventory);
 
     const logEntry = {
@@ -343,22 +356,43 @@ export default function PharmacistDashboard() {
                     <div className="space-y-6">
                       <h5 className="text-sm font-black uppercase tracking-[0.3em] text-slate-400 ml-2">Clinical Regimen Details</h5>
                       <div className="space-y-4">
-                        {activeOrder.medications.map((m: any, i: number) => (
-                          <div key={i} className="flex justify-between items-center p-8 bg-white rounded-[2rem] border-2 shadow-sm hover:border-primary/30 transition-all">
-                            <div className="flex items-center gap-6">
-                              <div className="h-16 w-16 bg-primary/5 rounded-2xl flex items-center justify-center">
-                                <Package className="h-8 w-8 text-primary" />
+                        {activeOrder.medications.map((m: any, i: number) => {
+                          const inventoryItem = inventory.find(inv => inv.name.toLowerCase().includes(m.name.toLowerCase()) || m.name.toLowerCase().includes(inv.name.toLowerCase()));
+                          const unitPrice = inventoryItem ? inventoryItem.price : 0;
+                          const qty = 10; // Simulation
+                          const total = unitPrice * qty;
+
+                          return (
+                            <div key={i} className="flex justify-between items-center p-8 bg-white rounded-[2rem] border-2 shadow-sm hover:border-primary/30 transition-all">
+                              <div className="flex items-center gap-6">
+                                <div className="h-16 w-16 bg-primary/5 rounded-2xl flex items-center justify-center">
+                                  <Package className="h-8 w-8 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-black text-2xl uppercase tracking-tight">{m.name}</p>
+                                  <p className="text-sm font-bold text-muted-foreground mt-1 uppercase italic">{m.dosage} • {m.timeLabel} • {m.duration}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-black text-2xl uppercase tracking-tight">{m.name}</p>
-                                <p className="text-sm font-bold text-muted-foreground mt-1 uppercase italic">{m.dosage} • {m.frequency} • {m.duration}</p>
+                              <div className="flex items-center gap-12 text-right">
+                                <div>
+                                  <p className="text-[10px] font-black text-muted-foreground uppercase mb-1">Unit Price</p>
+                                  <p className="font-bold text-lg">₹{unitPrice}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-black text-muted-foreground uppercase mb-1">Qty</p>
+                                  <p className="font-bold text-lg">x{qty}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-black text-primary uppercase mb-1">Total</p>
+                                  <p className="font-black text-2xl text-primary tracking-tighter">₹{total}</p>
+                                </div>
+                                <Badge variant="secondary" className="font-black px-6 py-2 rounded-xl bg-primary/10 text-primary border-none text-[10px] uppercase tracking-widest hidden xl:block">
+                                  In Stock
+                                </Badge>
                               </div>
                             </div>
-                            <Badge variant="secondary" className="font-black px-6 py-2 rounded-xl bg-primary/10 text-primary border-none text-xs uppercase tracking-widest">
-                              In Stock
-                            </Badge>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
 

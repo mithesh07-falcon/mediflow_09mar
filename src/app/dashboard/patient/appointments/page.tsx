@@ -71,18 +71,58 @@ export default function AppointmentPage() {
 
           // AUTO-SELECT for recommendation
           if (aiSpecialist && aiSpecialist !== "all") {
-            const normalizedSpec = aiSpecialist.toLowerCase();
-            // Fuzzy match logic: Orthopedic Surgeon -> Orthopedics
-            const actualSpec = specs.find((s) =>
-              s.toLowerCase() === normalizedSpec ||
-              normalizedSpec.includes(s.toLowerCase().replace(/s$/, '')) || // handles Orthopedics -> Orthopedic
-              s.toLowerCase().includes(normalizedSpec.replace(/ surgeon| doctor| specialist/gi, '').trim().split(' ')[0])
-            ) || aiSpecialist;
+            // ── Smart Specialist Matcher ──────────────────────────────────
+            // Priority keyword map: maps known AI output words → DB spec keywords
+            const keywordMap: Record<string, string[]> = {
+              ent: ["ent", "ear", "nose", "throat"],
+              gastro: ["gastro", "stomach", "digestive", "gi"],
+              neuro: ["neuro", "brain", "nerve"],
+              cardio: ["cardio", "heart"],
+              ophthal: ["ophthal", "eye", "vision", "ocular"],
+              ortho: ["ortho", "bone", "joint", "spine", "muscle"],
+              derma: ["derma", "skin", "dermatol"],
+              pediatr: ["pediatr", "child"],
+              general: ["general", "medicine", "family", "internal"],
+            };
+            const normalizedAI = aiSpecialist.toLowerCase();
 
-            setRecommendedSpec(actualSpec);
-            setFilterSpec(actualSpec);
+            // 1. Try exact match first
+            let bestSpec = specs.find(s => s.toLowerCase() === normalizedAI);
 
-            const suggestedDoc = data.doctors.find((d: any) => d.specialization === actualSpec || d.specialization === aiSpecialist);
+            // 2. Try: AI output keywords exist inside DB spec name
+            if (!bestSpec) {
+              bestSpec = specs.find(s => {
+                const sl = s.toLowerCase();
+                return normalizedAI.split(/[\s,/-]+/).some(word => word.length > 2 && sl.includes(word));
+              });
+            }
+
+            // 3. Try: DB spec keywords exist inside AI output string
+            if (!bestSpec) {
+              bestSpec = specs.find(s => {
+                const sl = s.toLowerCase();
+                return sl.split(/[\s,/-]+/).some(word => word.length > 2 && normalizedAI.includes(word));
+              });
+            }
+
+            // 4. Keyword-map fallback
+            if (!bestSpec) {
+              for (const [_group, keywords] of Object.entries(keywordMap)) {
+                if (keywords.some(kw => normalizedAI.includes(kw))) {
+                  const found = specs.find(s => keywords.some(kw => s.toLowerCase().includes(kw)));
+                  if (found) { bestSpec = found; break; }
+                }
+              }
+            }
+
+            const resolvedSpec = bestSpec || aiSpecialist;
+            setRecommendedSpec(resolvedSpec);
+            setFilterSpec(resolvedSpec);
+
+            const suggestedDoc = data.doctors.find((d: any) =>
+              d.specialization === resolvedSpec ||
+              d.specialization?.toLowerCase() === normalizedAI
+            );
             if (suggestedDoc) {
               setSelectedDoctor(suggestedDoc.email);
             }
@@ -100,19 +140,63 @@ export default function AppointmentPage() {
   useEffect(() => {
     if (!selectedDoctor || !date) return;
     setCheckingSlots(true);
-    const dateStr = date.toISOString().split('T')[0];
+
+    // ── LOCAL DATE STRING (timezone-safe) ────────────────────────────────
+    // NEVER use toISOString() for date comparison — it returns UTC which is
+    // offset by +5:30 for IST users, causing wrong "isToday" detection.
+    const localYear = date.getFullYear();
+    const localMonth = String(date.getMonth() + 1).padStart(2, '0');
+    const localDay = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${localYear}-${localMonth}-${localDay}`;
+
     const displayDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-    // Optimization: reduced delay to 50ms for hyper-responsive feel
     const timer = setTimeout(() => {
       // MASTER SLOT LOGIC: Fetch Admin-configured slots for this doctor/date
       const allMaster = JSON.parse(localStorage.getItem("mediflow_master_schedules") || "{}");
-      const configSlots = allMaster[`${selectedDoctor}_${dateStr}`];
-      setMasterSlots(configSlots || ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM", "04:00 PM"]);
+      const rawSlots: string[] = allMaster[`${selectedDoctor}_${dateStr}`] ||
+        ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM", "04:00 PM"];
+
+      // ── TIME-AWARE SLOT FILTER (LOCAL TIMEZONE) ──────────────────────────
+      // Build today's local date string the same timezone-safe way
+      const now = new Date();
+      const todayYear = now.getFullYear();
+      const todayMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const todayDay = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${todayYear}-${todayMonth}-${todayDay}`;
+
+      const isToday = dateStr === todayStr;
+      let availableSlots = rawSlots;
+
+      if (isToday) {
+        availableSlots = rawSlots.filter(slot => {
+          // Parse "09:00 AM" or "02:00 PM"
+          const match = slot.match(/(\d+):(\d+)\s*(AM|PM)/i);
+          if (!match) return true;
+          let hours = parseInt(match[1], 10);
+          const mins = parseInt(match[2], 10);
+          const ampm = match[3].toUpperCase();
+          if (ampm === "PM" && hours !== 12) hours += 12;
+          if (ampm === "AM" && hours === 12) hours = 0;
+
+          // Build a Date object for this slot using today's LOCAL date
+          const slotTime = new Date();
+          slotTime.setHours(hours, mins, 0, 0);
+
+          // STRICT: hide any slot whose time is <= right now
+          return slotTime.getTime() > now.getTime();
+        });
+      }
+
+      setMasterSlots(availableSlots);
 
       // COLLISION CHECK: Fetch existing appointments
       const allAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
-      setBookedSlots(allAppts.filter((a: any) => a.doctorEmail === selectedDoctor && a.date === displayDate).map((a: any) => a.time));
+      setBookedSlots(
+        allAppts
+          .filter((a: any) => a.doctorEmail === selectedDoctor && a.date === displayDate)
+          .map((a: any) => a.time)
+      );
 
       setCheckingSlots(false);
     }, 50);
@@ -229,7 +313,13 @@ export default function AppointmentPage() {
             <Label className="text-lg font-bold uppercase text-slate-400">2. Mark Date</Label>
             <div className={!selectedDoctor ? 'opacity-40 pointer-events-none grayscale' : ''}>
               <div className="rounded-[3rem] border-2 shadow-2xl overflow-hidden bg-white">
-                <Calendar mode="single" selected={date} onSelect={(d) => { setDate(d); setSelectedSlot(""); }} className="w-full" />
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={(d) => { setDate(d); setSelectedSlot(""); }}
+                  className="w-full"
+                  disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                />
               </div>
             </div>
           </div>

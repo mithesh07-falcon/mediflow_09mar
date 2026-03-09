@@ -115,5 +115,49 @@
     "isVerified": true,
     "isAuthorized": true,
     "pharmacyId": null
+  },
+  {
+    "id": 203,
+    "name": "Alice Green",
+    "email": "alice.pharma@mediflow.com",
+    "passwordHash": "[SECURE_HASH]_QWxpY2VAMjAyNA==",
+    "passwordPlain": "Alice@2024!",
+    "role": "pharmacist",
+    "isAuthorized": true,
+    "pharmacyId": "PH-NORTH-003"
+  },
+  {
+    "id": 204,
+    "name": "Bob White",
+    "email": "bob.pharma@mediflow.com",
+    "passwordHash": "[SECURE_HASH]_Qm9iQDIwMjQ=",
+    "passwordPlain": "Bob@2024!",
+    "role": "pharmacist",
+    "isAuthorized": true,
+    "pharmacyId": "PH-EAST-004"
+  },
+  {
+    "id": 205,
+    "name": "Charlie Black",
+    "email": "charlie.pharma@mediflow.com",
+    "passwordHash": "[SECURE_HASH]_Q2hhcmxpZUAyMDI0",
+    "passwordPlain": "Charlie@2024!",
+    "role": "pharmacist",
+    "isAuthorized": true,
+    "pharmacyId": "PH-SOUTH-005"
+  },
+  {
+    "id": 1772962002060,
+    "name": "Suresh ",
+    "email": "sureshpharma22@mediflow.com",
+    "phone": "+919676854102",
+    "passwordHash": "[SECURE_HASH]_c3VyZXNoQHBoYXIx",
+    "passwordPlain": "suresh@phar1",
+    "role": "pharmacist",
+    "specialization": null,
+    "license": null,
+    "isVerified": true,
+    "isAuthorized": true,
+    "pharmacyId": "PH-GLOBAL-NEW"
   }
 ]

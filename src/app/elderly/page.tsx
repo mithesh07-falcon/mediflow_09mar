@@ -6,22 +6,40 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Heart, Phone, Loader2, ArrowLeft, ShieldCheck, User, KeyRound } from "lucide-react";
+import { Heart, Phone, Loader2, ArrowLeft, ShieldCheck, User, KeyRound, Languages, Mail } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/shared/Logo";
+import { cn } from "@/lib/utils";
 
 export default function SeniorCareLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // 1: Phone Numbers, 2: OTP
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
   const [guardianNumber, setGuardianNumber] = useState("");
+  const [elderName, setElderName] = useState("");
+  const [guardianName, setGuardianName] = useState("");
+  const [isGuardianVerified, setIsGuardianVerified] = useState(false);
   const [age, setAge] = useState("");
   const [otp, setOtp] = useState("");
   const [generatedOtp, setGeneratedOtp] = useState("");
+  const [showOtpPopup, setShowOtpPopup] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("English");
+
+  const languages = [
+    { name: "English", native: "English" },
+    { name: "Hindi", native: "हिंदी" },
+    { name: "Tamil", native: "தமிழ்" },
+    { name: "Telugu", native: "తెలుగు" },
+    { name: "Kannada", native: "ಕನ್ನಡ" },
+    { name: "Bengali", native: "বাংলা" },
+    { name: "Marathi", native: "मराठी" }
+  ];
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
@@ -30,11 +48,78 @@ export default function SeniorCareLoginPage() {
     }
   }, [router]);
 
+  const verifyGuardian = async (email: string) => {
+    if (!email || !email.includes("@")) {
+      toast({ variant: "destructive", title: "Invalid Email", description: "Please enter a valid guardian email address." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify-guardian", email }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGuardianName(data.guardian.name);
+        setGuardianNumber(data.guardian.phone.replace("+91", "")); // Strip prefix for local display
+        setIsGuardianVerified(true);
+        toast({ title: "Guardian Linked", description: `Found ${data.guardian.name}. Details auto-populated.` });
+      } else {
+        setIsGuardianVerified(false);
+        setGuardianName("");
+        toast({
+          variant: "destructive",
+          title: "Verification Failed",
+          description: data.error || "Guardian profile not found in our patient network."
+        });
+      }
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to connect to the patient registry." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber || !age) {
-      toast({ variant: "destructive", title: "Info Missing", description: "Please provide your number and age." });
+
+    if (phoneNumber.length !== 10) {
+      toast({ variant: "destructive", title: "Invalid Phone", description: "Please enter exactly 10 digits." });
       return;
+    }
+
+    const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+    const existingUser = allUsers.find((u: any) => u.phone && u.phone.replace(/\s/g, '').endsWith(phoneNumber));
+
+    if (mode === "signup") {
+      if (!age || !isGuardianVerified) {
+        toast({
+          variant: "destructive",
+          title: "Action Required",
+          description: !isGuardianVerified ? "You must verify a guardian's email to ensure clinical safety." : "Please provide your number and age."
+        });
+        return;
+      }
+      if (existingUser) {
+        toast({ variant: "destructive", title: "Already Registered", description: "This phone number is already registered. Please switch to Sign In." });
+        return;
+      }
+    } else {
+      // mode === "signin"
+      if (!existingUser || !existingUser.isElderly) {
+        toast({ variant: "destructive", title: "Account Not Found", description: "This phone number is not registered. Please Register first." });
+        return;
+      }
+      // Load user details for session construction during sign-in
+      setGuardianEmail(existingUser.guardianEmail || "");
+      setGuardianName(existingUser.guardianName || "Guardian");
+      setGuardianNumber(existingUser.guardianPhone || "");
+      setAge(existingUser.age || "60");
+      setSelectedLanguage(existingUser.language || "English");
     }
 
     setLoading(true);
@@ -42,10 +127,11 @@ export default function SeniorCareLoginPage() {
       const code = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(code);
       setStep(2);
+      setShowOtpPopup(true);
       setLoading(false);
       toast({
         title: "OTP SENT",
-        description: `Your 4-digit clinical access code is: ${code}`,
+        description: `Check the popup monitor for your access code.`,
         duration: 8000,
       });
     }, 200);
@@ -60,18 +146,43 @@ export default function SeniorCareLoginPage() {
 
     setLoading(true);
     setTimeout(() => {
+      const finalElderName = elderName.trim() || "Senior User";
+
       const senior = {
         role: 'patient',
         isElderly: true,
         phone: `+91 ${phoneNumber}`,
-        guardianPhone: `+91 ${guardianNumber}`,
+        guardianEmail,
+        guardianName,
+        guardianPhone: guardianNumber.startsWith("+") ? guardianNumber : `+91 ${guardianNumber}`,
         age: age,
-        firstName: "Senior User"
+        language: selectedLanguage,
+        firstName: mode === "signup" ? finalElderName : (existingUser?.firstName || "Senior User")
       };
       localStorage.setItem("mediflow_current_user", JSON.stringify(senior));
 
+      // If registering anew, save them to the global patient pool
+      if (mode === "signup") {
+        const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+        allUsers.push({
+          email: `${phoneNumber}@elder.local`, // internal dummy mapping
+          phone: `+91 ${phoneNumber}`,
+          firstName: finalElderName,
+          lastName: "",
+          age: age,
+          guardianName,
+          guardianPhone: guardianNumber,
+          guardianEmail,
+          guardianRelationship: "Dependent",
+          language: selectedLanguage,
+          isElderly: true
+        });
+        localStorage.setItem("mediflow_patients", JSON.stringify(allUsers));
+      }
+
       const saved = JSON.parse(localStorage.getItem("mediflow_family_members") || "[]");
-      const updated = [{ id: "senior-self", name: "Senior User", relation: "Self", age: age, seed: "42" }, ...saved.filter((m: any) => m.relation !== 'Self')];
+      const savedName = mode === "signup" ? finalElderName : (existingUser?.firstName || "Senior User");
+      const updated = [{ id: "senior-self", name: savedName, relation: "Self", age: age, seed: "42" }, ...saved.filter((m: any) => m.relation !== 'Self')];
       localStorage.setItem("mediflow_family_members", JSON.stringify(updated));
 
       setLoading(false);
@@ -98,17 +209,66 @@ export default function SeniorCareLoginPage() {
                 {step === 1 ? <Heart className="h-12 w-12 text-primary" /> : <KeyRound className="h-12 w-12 text-primary" />}
               </div>
               <CardTitle className="text-5xl font-black uppercase tracking-tight">
-                {step === 1 ? "Senior Access" : "Enter Code"}
+                {step === 1 ? (mode === "signin" ? "Senior Sign In" : "Senior Registration") : "Enter Code"}
               </CardTitle>
               <CardDescription className="text-2xl font-bold text-black opacity-60">
-                {step === 1 ? "Simple clinical sign-in" : "Check your messages for the OTP"}
+                {step === 1 ? (mode === "signin" ? "Welcome back. Enter your phone." : "Simple clinical sign-up") : "Check your messages for the OTP"}
               </CardDescription>
             </CardHeader>
 
             <CardContent className="px-10 pb-16">
               {step === 1 ? (
                 <form className="space-y-8" onSubmit={handleSendOtp}>
-                  <div className="space-y-6">
+                  <div className="flex bg-slate-100 p-2 rounded-2xl mb-8">
+                    <Button
+                      type="button"
+                      variant={mode === "signin" ? "default" : "ghost"}
+                      className={cn("flex-1 h-16 text-3xl font-black rounded-xl", mode === "signin" && "bg-black text-white shadow-md")}
+                      onClick={() => setMode("signin")}
+                    >
+                      SIGN IN
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={mode === "signup" ? "default" : "ghost"}
+                      className={cn("flex-1 h-16 text-3xl font-black rounded-xl", mode === "signup" && "bg-black text-white shadow-md")}
+                      onClick={() => setMode("signup")}
+                    >
+                      REGISTER
+                    </Button>
+                  </div>
+
+                  <div className="space-y-8 animate-in fade-in duration-300">
+                    {/* Only show language for signup */}
+                    {mode === "signup" && (
+                      <div className="space-y-4">
+                        <Label className="text-2xl font-black flex items-center gap-3">
+                          <Languages className="h-6 w-6 text-primary" /> SELECT YOUR LANGUAGE
+                        </Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          {languages.map((lang) => (
+                            <Button
+                              key={lang.name}
+                              type="button"
+                              variant={selectedLanguage === lang.name ? "default" : "outline"}
+                              className={cn(
+                                "h-20 text-2xl font-bold rounded-2xl border-4 transition-all",
+                                selectedLanguage === lang.name
+                                  ? "border-black shadow-lg scale-105"
+                                  : "border-slate-200 opacity-60 hover:opacity-100"
+                              )}
+                              onClick={() => setSelectedLanguage(lang.name)}
+                            >
+                              <div className="flex flex-col">
+                                <span>{lang.name}</span>
+                                <span className="text-sm opacity-60">{lang.native}</span>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-3">
                       <Label className="text-2xl font-black flex items-center gap-3">
                         <Phone className="h-6 w-6 text-primary" /> YOUR PHONE
@@ -117,44 +277,97 @@ export default function SeniorCareLoginPage() {
                         <span className="text-4xl font-black text-slate-400">+91</span>
                         <Input
                           className="h-24 text-5xl px-8 rounded-3xl border-4 border-black font-black"
-                          placeholder="00000 00000"
+                          placeholder="0000000000"
                           type="tel"
                           value={phoneNumber}
-                          onChange={e => setPhoneNumber(e.target.value)}
+                          onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
                           required
                         />
                       </div>
                     </div>
 
-                    <div className="space-y-3">
-                      <Label className="text-2xl font-black">GUARDIAN PHONE</Label>
-                      <div className="flex gap-4 items-center">
-                        <span className="text-4xl font-black text-slate-400">+91</span>
-                        <Input
-                          className="h-20 text-4xl px-8 rounded-3xl border-4 border-black font-bold"
-                          placeholder="Contact"
-                          type="tel"
-                          value={guardianNumber}
-                          onChange={e => setGuardianNumber(e.target.value)}
-                        />
-                      </div>
-                    </div>
+                    {mode === "signup" && (
+                      <>
+                        <div className="space-y-3">
+                          <Label className="text-2xl font-black flex items-center gap-3">
+                            <User className="h-6 w-6 text-primary" /> YOUR NAME
+                          </Label>
+                          <Input
+                            className="h-20 text-4xl px-8 rounded-3xl border-4 border-black font-bold"
+                            placeholder="Full Name"
+                            value={elderName}
+                            onChange={e => setElderName(e.target.value)}
+                            required
+                          />
+                        </div>
 
-                    <div className="space-y-3">
-                      <Label className="text-2xl font-black flex items-center gap-3">
-                        <User className="h-6 w-6 text-primary" /> YOUR AGE
-                      </Label>
-                      <Input
-                        className="h-20 text-4xl px-8 rounded-3xl border-4 border-black font-bold"
-                        placeholder="Age"
-                        type="number"
-                        value={age}
-                        onChange={e => setAge(e.target.value)}
-                        required
-                      />
-                    </div>
+                        <div className="space-y-3">
+                          <Label className="text-2xl font-black flex items-center gap-3">
+                            GUARDIAN EMAIL (REQUIRED)
+                          </Label>
+                          <div className="flex gap-4">
+                            <Input
+                              className="h-20 text-3xl px-8 rounded-3xl border-4 border-black font-bold flex-1"
+                              placeholder="guardian@example.com"
+                              type="email"
+                              value={guardianEmail}
+                              onChange={e => {
+                                setGuardianEmail(e.target.value);
+                                setIsGuardianVerified(false);
+                              }}
+                              required
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => verifyGuardian(guardianEmail)}
+                              className="h-20 px-8 rounded-3xl bg-black text-white hover:bg-zinc-800 font-bold"
+                              disabled={loading || isGuardianVerified}
+                            >
+                              {isGuardianVerified ? "VERIFIED" : "LINK"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className={cn("space-y-6 transition-all", !isGuardianVerified ? "opacity-30 pointer-events-none" : "opacity-100")}>
+                          <div className="space-y-3">
+                            <Label className="text-2xl font-black">GUARDIAN NAME</Label>
+                            <Input
+                              className="h-20 text-3xl px-8 rounded-3xl border-4 border-black bg-slate-50 font-bold"
+                              value={guardianName}
+                              readOnly
+                            />
+                          </div>
+                          <div className="space-y-3">
+                            <Label className="text-2xl font-black">GUARDIAN CONTACT NO.</Label>
+                            <div className="flex gap-4 items-center">
+                              <span className="text-4xl font-black text-slate-400">+91</span>
+                              <Input
+                                className="h-20 text-4xl px-8 rounded-3xl border-4 border-black bg-slate-50 font-bold"
+                                value={guardianNumber}
+                                readOnly
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label className="text-2xl font-black flex items-center gap-3">
+                            <User className="h-6 w-6 text-primary" /> YOUR AGE
+                          </Label>
+                          <Input
+                            className="h-20 text-4xl px-8 rounded-3xl border-4 border-black font-bold"
+                            placeholder="Age"
+                            type="number"
+                            value={age}
+                            onChange={e => setAge(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                   <Button className="w-full h-28 text-4xl font-black rounded-[2.5rem] bg-primary text-white shadow-2xl border-b-8 border-black hover:translate-y-1 transition-transform" disabled={loading}>
+
                     {loading ? <Loader2 className="h-12 w-12 animate-spin" /> : "SEND OTP"}
                   </Button>
                 </form>
@@ -192,6 +405,29 @@ export default function SeniorCareLoginPage() {
           </Card>
         </div>
       </main>
+
+      {/* OTP Pop-up at Bottom Right */}
+      {showOtpPopup && (
+        <div className="fixed bottom-6 right-6 z-[100] animate-in slide-in-from-bottom-5 duration-500">
+          <Card className="w-80 border-[6px] border-black shadow-2xl bg-white dark:bg-zinc-900 overflow-hidden rounded-[2rem]">
+            <div className="bg-black p-4 flex justify-between items-center text-white">
+              <span className="font-bold text-sm flex items-center gap-2 uppercase tracking-wide">
+                <Mail className="h-5 w-5 text-green-400" /> New Message
+              </span>
+              <button onClick={() => setShowOtpPopup(false)} className="hover:bg-white/20 px-3 py-1 bg-white/10 rounded-xl transition-colors">
+                <span className="text-xs uppercase font-black">Dismiss</span>
+              </button>
+            </div>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-lg font-black uppercase text-center border-b-2 border-slate-100 pb-2">Your Access Code:</p>
+              <div className="bg-green-50 p-6 rounded-3xl text-center border-4 border-black">
+                <span className="text-5xl font-black tracking-[0.5rem] text-black">{generatedOtp}</span>
+              </div>
+              <p className="text-xs text-center font-bold text-muted-foreground uppercase leading-tight">Type this 4-digit code into the main screen.</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -43,11 +43,22 @@ export default function GuardianDashboard() {
     ]);
 
     useEffect(() => {
-        const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-        setElderlyUser(user);
+        const currentUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+        const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
 
-        // Simulate fetching elderly's data based on guardian connection
-        // In a real app, this would be a secure API call
+        // Find the elderly patient who listed this user as their guardian
+        const linkedElderly = allUsers.find((u: any) =>
+            u.isElderly &&
+            u.guardianEmail &&
+            u.guardianEmail.toLowerCase() === currentUser.email?.toLowerCase()
+        );
+
+        if (linkedElderly) {
+            setElderlyUser(linkedElderly);
+        } else {
+            // Fallback just in case
+            setElderlyUser({ firstName: "Senior User" });
+        }
     }, []);
 
     return (

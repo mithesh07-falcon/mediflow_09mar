@@ -20,7 +20,9 @@ import {
   Heart,
   Stethoscope,
   Video,
-  Loader2
+  Loader2,
+  Phone,
+  Siren
 } from "lucide-react";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +44,7 @@ export default function PatientDashboard() {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [nextAppointment, setNextAppointment] = useState<any>(null);
   const [connectingTele, setConnectingTele] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
 
   useEffect(() => {
     const activeUserStr = localStorage.getItem("mediflow_current_user");
@@ -58,6 +61,7 @@ export default function PatientDashboard() {
     }
 
     setUserName(user.firstName || "Guest");
+    setUserProfile(user);
 
     const saved = localStorage.getItem("mediflow_family_members");
     let members: FamilyMember[] = [];
@@ -80,16 +84,38 @@ export default function PatientDashboard() {
         const data = await res.json();
 
         if (res.ok && data.appointments) {
-          // The backend strictly isolates by user, we only need to filter for family mapping locally if needed
-          const myAppts = data.appointments.filter((a: any) => {
-            if (!a.patient) return false;
-            const patientName = a.patient.toLowerCase();
-            const matchesFamily = membersList.some(m => m.name && m.name.toLowerCase() === patientName);
-            const matchesSelf = patientName === (user.firstName || "").toLowerCase();
-            return matchesFamily || matchesSelf;
-          });
-          if (myAppts.length > 0) {
-            setNextAppointment(myAppts[0]);
+          const now = new Date();
+
+          const upcomingAppts = data.appointments
+            .filter((a: any) => {
+              if (!a.patient) return false;
+              const patientName = a.patient.toLowerCase();
+              const matchesFamily = membersList.some(m => m.name && m.name.toLowerCase() === patientName);
+              const matchesSelf = patientName === (user.firstName || "").toLowerCase();
+              if (!matchesFamily && !matchesSelf) return false;
+
+              // Filter out completed/cancelled/missed statuses
+              const s = (a.status || "").toLowerCase();
+              if (s === "completed" || s === "done" || s === "missed" || s === "cancelled") return false;
+
+              // Filter out past appointments
+              try {
+                const apptDate = new Date(`${a.date} ${a.time}`);
+                return !isNaN(apptDate.getTime()) && apptDate > now;
+              } catch {
+                return false;
+              }
+            })
+            .sort((a: any, b: any) => {
+              const dateA = new Date(`${a.date} ${a.time}`).getTime();
+              const dateB = new Date(`${b.date} ${b.time}`).getTime();
+              return dateA - dateB;
+            });
+
+          if (upcomingAppts.length > 0) {
+            setNextAppointment(upcomingAppts[0]);
+          } else {
+            setNextAppointment(null);
           }
         }
       } catch (e) {
@@ -100,15 +126,15 @@ export default function PatientDashboard() {
     fetchSecureAppointments(members);
   }, [router]);
 
-  const handleTeleConsult = () => {
-    setConnectingTele(true);
+  const handleEmergencyCall = () => {
+    toast({
+      variant: "destructive",
+      title: "Emergency Response Initiated",
+      description: "Redirecting to your nearest Hospital's Emergency Wing...",
+    });
     setTimeout(() => {
-      setConnectingTele(false);
-      toast({
-        title: "Clinical Room Ready",
-        description: "A specialized clinician is now available for your urgent consultation.",
-      });
-    }, 2000);
+      window.location.href = "tel:108"; // Emergency response number
+    }, 1500);
   };
 
   return (
@@ -142,6 +168,17 @@ export default function PatientDashboard() {
             <div className="hidden lg:block border-l pl-6">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Managed Profiles</p>
               <p className="text-2xl font-headline font-bold">{familyMembers.length} Members</p>
+            </div>
+            {userProfile?.guardianName && (
+              <div className="hidden xl:block border-l pl-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-primary mb-1">Guardian Active</p>
+                <p className="text-xl font-headline font-bold">{userProfile.guardianName}</p>
+                <p className="text-[10px] text-muted-foreground italic">{userProfile.guardianRelationship}</p>
+              </div>
+            )}
+            <div className="hidden sm:block border-l pl-6">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Language</p>
+              <p className="text-xl font-headline font-bold">{userProfile?.language || "English"}</p>
             </div>
           </div>
         </header>
@@ -181,7 +218,7 @@ export default function PatientDashboard() {
                   <Button
                     variant="outline"
                     className="w-full mt-6 rounded-xl group"
-                    onClick={() => router.push('/dashboard/patient/appointments')}
+                    onClick={() => router.push('/dashboard/patient/my-schedule')}
                   >
                     View Schedule <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
@@ -231,40 +268,30 @@ export default function PatientDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="bg-primary text-white rounded-[2.5rem] shadow-xl overflow-hidden relative group">
+            <Card className="bg-red-600 text-white rounded-[2.5rem] shadow-xl overflow-hidden relative group border-none">
               <div className="absolute top-0 right-0 p-8 opacity-10">
-                <Video className="h-32 w-32" />
+                <Siren className="h-32 w-32" />
               </div>
               <CardContent className="p-10 relative z-10 space-y-6">
                 <div className="flex items-center gap-5">
                   <div className="h-16 w-16 bg-white/20 rounded-2xl flex items-center justify-center">
-                    <PlusCircle className="h-8 w-8 text-white" />
+                    <Phone className="h-8 w-8 text-white" />
                   </div>
                   <div>
-                    <h4 className="text-2xl font-headline font-bold">Urgent Help</h4>
+                    <h4 className="text-2xl font-headline font-bold">ER Service</h4>
                     <div className="flex items-center gap-2 mt-1">
-                      <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-                      <p className="text-white/70 text-xs font-bold uppercase tracking-widest">Connect in 60s</p>
+                      <div className="h-2 w-2 rounded-full bg-red-200 animate-pulse" />
+                      <p className="text-white/70 text-xs font-bold uppercase tracking-widest">Immediate Call Dispatch</p>
                     </div>
                   </div>
                 </div>
                 <Button
                   variant="secondary"
-                  className="w-full h-16 text-xl rounded-2xl bg-white text-primary hover:bg-white/90 shadow-lg font-bold flex items-center justify-center gap-2"
-                  onClick={handleTeleConsult}
-                  disabled={connectingTele}
+                  className="w-full h-16 text-xl rounded-2xl bg-white text-red-600 hover:bg-white/90 shadow-lg font-bold flex items-center justify-center gap-2"
+                  onClick={handleEmergencyCall}
                 >
-                  {connectingTele ? (
-                    <>
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    <>
-                      <Video className="h-6 w-6" />
-                      Tele-Consult
-                    </>
-                  )}
+                  <Phone className="h-6 w-6" />
+                  EMERGENCY CALL
                 </Button>
               </CardContent>
             </Card>

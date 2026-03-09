@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSafeRegistry, addStaff } from "@/lib/mock-db";
+import fs from "fs";
+import path from "path";
 
 const mockHash = (pass: string) => `[SECURE_HASH]_${Buffer.from(pass).toString('base64')}`;
 
@@ -12,16 +14,37 @@ export async function GET() {
 
 export async function POST(request: Request) {
     try {
-        const { name, email, password, role, specialization, license } = await request.json();
+        const { name, email, password, role, specialization, license, phone } = await request.json();
 
-        if (!name || !email || !password) {
-            return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+        if (!name || !email || !password || !phone) {
+            return NextResponse.json({ error: "Missing required fields (Name, Email, Password, Phone)." }, { status: 400 });
+        }
+
+        const emailLower = email.toLowerCase();
+
+        // Check local staff registry
+        const staff = getSafeRegistry();
+        const existsInStaff = staff.some(s => s.email.toLowerCase() === emailLower);
+
+        // Check patients registry
+        let existsInPatients = false;
+        try {
+            const patientsPath = path.join(process.cwd(), "data", "patients.json");
+            if (fs.existsSync(patientsPath)) {
+                const patients = JSON.parse(fs.readFileSync(patientsPath, "utf-8"));
+                existsInPatients = patients.some((p: any) => p.email.toLowerCase() === emailLower);
+            }
+        } catch (e) { }
+
+        if (existsInStaff || existsInPatients) {
+            return NextResponse.json({ error: "This email is already registered. Please use a different email." }, { status: 409 });
         }
 
         const newStaff = {
             id: Date.now(),
             name,
             email,
+            phone,
             passwordHash: mockHash(password),
             passwordPlain: password, // Store plain key for mock login verification
             role,

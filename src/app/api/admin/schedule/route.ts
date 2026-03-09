@@ -1,38 +1,89 @@
 import { NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
 
-// Simple persistent schedule storage in memory (shared with standard booking)
-let masterSchedules: Record<string, string[]> = {
-    "dr.smith.neuro@mediflow.com_2024-03-07": ["09:00 AM", "09:30 AM", "10:00 AM"],
-    "dr.jones.gastro@mediflow.com_2024-03-07": ["11:00 AM", "11:30 AM", "12:00 PM"]
-};
+const SLOTS_DB_PATH = path.join(process.cwd(), "data", "slots.json");
 
-export async function GET(request: Request) {
-    const { searchParams } = new URL(request.url);
-    const docEmail = searchParams.get("docEmail");
-    const date = searchParams.get("date");
-
-    if (!docEmail || !date) {
-        return NextResponse.json({ schedules: masterSchedules });
+async function ensureRegistry() {
+    const dir = path.dirname(SLOTS_DB_PATH);
+    try {
+        await fs.access(dir);
+    } catch {
+        await fs.mkdir(dir, { recursive: true });
     }
+    try {
+        await fs.access(SLOTS_DB_PATH);
+    } catch {
+        await fs.writeFile(SLOTS_DB_PATH, JSON.stringify([], null, 2));
+    }
+}
 
-    const key = `${docEmail}_${date}`;
-    return NextResponse.json({ slots: masterSchedules[key] || [] });
+async function readSlots() {
+    await ensureRegistry();
+    const content = await fs.readFile(SLOTS_DB_PATH, "utf-8");
+    return JSON.parse(content || "[]");
+}
+
+async function writeSlots(slots: any[]) {
+    await fs.writeFile(SLOTS_DB_PATH, JSON.stringify(slots, null, 2));
+}
+
+export async function GET(request: URL | Request) {
+    try {
+        const { searchParams } = new URL(request instanceof Request ? request.url : request);
+        const docEmail = searchParams.get("docEmail");
+        const date = searchParams.get("date");
+        const status = searchParams.get("status"); // 'pending', 'approved'
+
+        const allSlots = await readSlots();
+        let filtered = allSlots;
+
+        if (docEmail) filtered = filtered.filter((s: any) => s.docEmail.toLowerCase() === docEmail.toLowerCase());
+        if (date) filtered = filtered.filter((s: any) => s.date === date);
+        if (status) filtered = filtered.filter((s: any) => s.status === status);
+
+        return NextResponse.json({ slots: filtered });
+    } catch (err) {
+        return NextResponse.json({ error: "Failed to fetch slots." }, { status: 500 });
+    }
 }
 
 export async function POST(request: Request) {
-    const { docEmail, date, slots, action, slotToEdit, newSlot } = await request.json();
-    const key = `${docEmail}_${date}`;
+    try {
+        const body = await request.json();
+        const { action, docEmail, date, slot, id, status, slots } = body;
+        const allSlots = await readSlots();
 
-    if (action === "update_all") {
-        masterSchedules[key] = slots;
-    } else if (action === "edit_slot") {
-        masterSchedules[key] = masterSchedules[key].map(s => s === slotToEdit ? newSlot : s);
-    } else if (action === "delete_slot") {
-        masterSchedules[key] = masterSchedules[key].filter(s => s !== slotToEdit);
-    } else if (action === "add_slot") {
-        if (!masterSchedules[key]) masterSchedules[key] = [];
-        if (!masterSchedules[key].includes(newSlot)) masterSchedules[key].push(newSlot);
+        if (action === "request_slots") {
+            // Doctors request multiple slots at once
+            const newRequests = slots.map((s: string) => ({
+                id: Date.now() + Math.random(),
+                docEmail,
+                date,
+                slot: s,
+                status: "pending",
+                createdAt: new Date().toISOString()
+            }));
+            await writeSlots([...allSlots, ...newRequests]);
+            return NextResponse.json({ success: true, message: "Slots sent for Admin approval." });
+        }
+
+        if (action === "approve") {
+            const updated = allSlots.map((s: any) =>
+                s.id === id ? { ...s, status: "approved" } : s
+            );
+            await writeSlots(updated);
+            return NextResponse.json({ success: true });
+        }
+
+        if (action === "reject") {
+            const updated = allSlots.filter((s: any) => s.id !== id);
+            await writeSlots(updated);
+            return NextResponse.json({ success: true });
+        }
+
+        return NextResponse.json({ error: "Invalid action." }, { status: 400 });
+    } catch (err) {
+        return NextResponse.json({ error: "Failed to process slot action." }, { status: 500 });
     }
-
-    return NextResponse.json({ success: true, slots: masterSchedules[key] });
 }

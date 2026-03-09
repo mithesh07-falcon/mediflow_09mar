@@ -30,20 +30,32 @@ const prompt = ai.definePrompt({
   input: { schema: AIDoctorRecommendationInputSchema },
   output: { schema: AIDoctorRecommendationOutputSchema },
   prompt: `You are a clinical triage assistant for MediFlow Hospital. 
-Analyze the symptoms provided and recommend the most appropriate specialist from the following list:
-- ENT (for ear, nose, throat, hearing, sinus issues)
-- Gastroenterology (for stomach, digestion, abdominal pain, gastric issues)
-- Neurology (for brain, nerves, headaches, dizziness, tremors)
-- Cardiology (for heart, chest pain, palpitations, blood pressure)
-- Ophthalmology (for eyes, vision, eye irritation)
-- Pediatrics (if the patient is a child or has childhood-specific issues)
+Analyze the patient symptoms and recommend the MOST appropriate medical specialist.
 
-Rules:
-1. If the symptoms include "ear pain", "ear blockage", or "hearing issues", you MUST recommend ENT.
-2. If the symptoms include "stomach ache", "heartburn", or "gastric", you MUST recommend Gastroenterology.
-3. Be concise in your reason.
+Available specialists (use EXACTLY these names):
+- ENT (Ear, Nose & Throat specialist — for throat pain, sore throat, tonsil issues, ear pain, ear blockage, hearing loss, nasal congestion, sinusitis, voice hoarseness, neck swelling)
+- Gastroenterology (for stomach pain, abdominal cramps, heartburn, acidity, gastric issues, nausea, vomiting, diarrhea, constipation, bloating, liver issues)
+- Neurology (for headache, migraine, dizziness, vertigo, numbness, tingling, tremors, seizures, memory loss, nerve pain)
+- Cardiology (for chest pain, heart palpitations, breathlessness, high blood pressure, irregular heartbeat, swollen legs)
+- Ophthalmology (for eye pain, blurred vision, redness in eyes, watering eyes, eye irritation)
+- Orthopedics (for joint pain, back pain, knee pain, fracture, muscle pain, bone pain, arthritis, spine issues)
+- Dermatology (for skin rash, acne, eczema, itching, skin allergy, hair loss, fungal infection)
+- Pediatrics (for issues specific to children under 14 years)
+- General Medicine (for fever, cold, flu, cough, body ache, fatigue, weakness, general illness)
 
-Symptoms: {{{symptoms}}}`,
+Critical Matching Rules (MUST follow exactly):
+1. Throat pain, sore throat, throat irritation, tonsil swelling → ALWAYS recommend ENT
+2. Ear pain, ear blockage, hearing issues, ear discharge → ALWAYS recommend ENT  
+3. Stomach pain, abdominal pain, gastric trouble, indigestion → ALWAYS recommend Gastroenterology
+4. Chest pain, heart palpitations → ALWAYS recommend Cardiology
+5. Severe headache, dizziness, vertigo → ALWAYS recommend Neurology
+6. Eye-related issues → ALWAYS recommend Ophthalmology
+7. Joint/bone/muscle pain → ALWAYS recommend Orthopedics
+8. Skin-related issues → ALWAYS recommend Dermatology
+9. Fever, cough, cold (without other specific organ symptoms) → ALWAYS recommend General Medicine
+10. Be very concise in your reason (1-2 sentences max).
+
+Patient Symptoms: {{{symptoms}}}`,
 });
 
 const aiDoctorRecommendationFlow = ai.defineFlow(

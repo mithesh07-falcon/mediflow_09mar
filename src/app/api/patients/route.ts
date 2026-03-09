@@ -17,6 +17,11 @@ export interface PatientRecord {
     age: string;
     password: string;
     registeredAt: string;
+    guardianName?: string;
+    guardianEmail?: string;
+    guardianPhone?: string;
+    guardianRelationship?: string;
+    language?: string;
 }
 
 // Path to the server-side JSON file that persists patient data
@@ -111,9 +116,61 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: true, patient: safePatient });
         }
 
+        // ─── VERIFY GUARDIAN ───
+        if (action === "verify-guardian") {
+            const { email } = body;
+            console.log(`[API:Patients:VerifyGuardian] Checking: ${email}`);
+
+            if (!email) {
+                return NextResponse.json({ error: "Email is required." }, { status: 400 });
+            }
+
+            const patients = readPatients();
+            const guardian = patients.find(p => p.email.toLowerCase() === email.toLowerCase());
+
+            if (!guardian) {
+                // Check if it exists in staff registry to provide a better error message if they are staff but not patient
+                const staffPath = path.join(process.cwd(), 'src', 'lib', 'staff-db.json');
+                let isStaff = false;
+                if (fs.existsSync(staffPath)) {
+                    const staff = JSON.parse(fs.readFileSync(staffPath, 'utf8') || "[]");
+                    isStaff = staff.some((s: any) => s.email.toLowerCase() === email.toLowerCase());
+                }
+
+                if (isStaff) {
+                    return NextResponse.json({
+                        error: "This email belongs to a staff member. Guardians must have a registered Patient account."
+                    }, { status: 403 });
+                }
+
+                return NextResponse.json({
+                    error: "Guardian not found. Please ensure they are registered as a patient in MediFlow."
+                }, { status: 404 });
+            }
+
+            return NextResponse.json({
+                success: true,
+                guardian: {
+                    name: `${guardian.firstName} ${guardian.lastName}`,
+                    phone: guardian.phone
+                }
+            });
+        }
+
         // ─── REGISTER ───
         if (action === "register") {
-            const { firstName, lastName, email, phone, age, password } = body;
+            const {
+                firstName,
+                lastName,
+                email,
+                phone,
+                age,
+                password,
+                guardianName,
+                guardianPhone,
+                guardianRelationship,
+                language
+            } = body;
             console.log(`[API:Patients:Register] Attempting registration for: ${email}`);
 
             if (!firstName || !lastName || !email || !phone || !password) {
@@ -143,6 +200,7 @@ export async function POST(request: Request) {
             }
 
             const patients = readPatients();
+            const staffRegistry = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src', 'lib', 'staff-db.json'), 'utf8') || "[]");
 
             // Check phone uniqueness
             if (patients.some((p) => p.phone.replace(/\s/g, "") === phoneClean)) {
@@ -153,11 +211,14 @@ export async function POST(request: Request) {
                 );
             }
 
-            // Check email uniqueness
-            if (patients.some((p) => p.email.toLowerCase() === emailLower)) {
+            // Check email uniqueness (Cross-role check)
+            const emailInPatients = patients.some((p) => p.email.toLowerCase() === emailLower);
+            const emailInStaff = staffRegistry.some((s: any) => s.email.toLowerCase() === emailLower);
+
+            if (emailInPatients || emailInStaff) {
                 console.warn(`[API:Patients:Register] Email conflict: ${emailLower}`);
                 return NextResponse.json(
-                    { error: "This email address is already associated with a clinical account." },
+                    { error: "This email is already registered. Please use a different email." },
                     { status: 409 }
                 );
             }
@@ -171,6 +232,10 @@ export async function POST(request: Request) {
                 age,
                 password,
                 registeredAt: new Date().toISOString(),
+                guardianName,
+                guardianPhone,
+                guardianRelationship,
+                language: language || "English"
             };
 
             patients.push(newPatient);

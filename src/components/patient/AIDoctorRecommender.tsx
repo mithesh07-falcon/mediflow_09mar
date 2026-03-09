@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Stethoscope, ChevronRight, Activity, Calendar } from "lucide-react";
+import { Loader2, Stethoscope, ChevronRight, Activity, Calendar, Mic, MicOff } from "lucide-react";
 import { aiDoctorRecommendation, type AIDoctorRecommendationOutput } from "@/ai/flows/ai-doctor-recommendation";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +17,68 @@ export function AIDoctorRecommender() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AIDoctorRecommendationOutput | null>(null);
   const [error, setError] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  const getLangCode = (lang: string) => {
+    const map: Record<string, string> = {
+      "English": "en-US",
+      "Hindi": "hi-IN",
+      "Tamil": "ta-IN",
+      "Telugu": "te-IN",
+      "Kannada": "kn-IN",
+      "Bengali": "bn-IN",
+      "Marathi": "mr-IN"
+    };
+    return map[lang] || "en-US";
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast({
+        variant: "destructive",
+        title: "Voice Not Supported",
+        description: "Your browser does not support voice input."
+      });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    // Secretly pull their regional language from their profile
+    const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+    recognition.lang = getLangCode(user.language || "English");
+
+    recognition.onstart = () => setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+      let currentTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          currentTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (currentTranscript) {
+        setSymptoms(prev => (prev + " " + currentTranscript).trim());
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => setIsListening(false);
+
+    recognition.start();
+  };
 
   const handleRecommendation = async () => {
     if (!symptoms.trim()) return;
@@ -69,12 +131,30 @@ export function AIDoctorRecommender() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Textarea
-          placeholder="Describe your symptoms (e.g., 'Persistent cough for 3 days...')"
-          className="min-h-[120px] resize-none rounded-2xl border-2 focus:border-primary/50"
-          value={symptoms}
-          onChange={(e) => setSymptoms(e.target.value)}
-        />
+        <div className="relative">
+          <Textarea
+            placeholder="Describe your symptoms (e.g., 'Persistent cough for 3 days...')"
+            className="min-h-[120px] resize-none rounded-2xl border-2 focus:border-primary/50 pr-14 transition-all"
+            value={symptoms}
+            onChange={(e) => setSymptoms(e.target.value)}
+          />
+          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+            {isListening && (
+              <span className="text-[10px] font-black text-primary uppercase animate-pulse tracking-widest bg-primary/10 px-2 py-1 rounded-md">
+                Listening: {JSON.parse(localStorage.getItem("mediflow_current_user") || "{}").language || "English"}
+              </span>
+            )}
+            <Button
+              size="icon"
+              variant={isListening ? "destructive" : "secondary"}
+              className={`rounded-full h-10 w-10 transition-all ${isListening ? 'animate-pulse scale-110' : 'hover:scale-105'}`}
+              onClick={toggleListening}
+              type="button"
+            >
+              {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            </Button>
+          </div>
+        </div>
         <Button
           className="w-full py-6 text-lg rounded-xl shadow-lg shadow-primary/20"
           disabled={loading || !symptoms.trim()}

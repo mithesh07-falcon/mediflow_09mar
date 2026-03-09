@@ -54,12 +54,13 @@ export default function FormalAdminDashboard() {
   const [metrics, setMetrics] = useState({
     doctors: 0,
     pharmacists: 0,
-    pendingComplaints: 0
+    pendingComplaints: 0,
+    pendingSlots: 0
   });
 
   // Registry States
   const [staff, setStaff] = useState<any[]>([]);
-  const [newStaff, setNewStaff] = useState({ name: "", email: "", password: "", role: "doctor", specialization: "", license: "" });
+  const [newStaff, setNewStaff] = useState({ name: "", email: "", password: "", role: "doctor", specialization: "", license: "", phone: "+91 " });
   const [generatedCreds, setGeneratedCreds] = useState<any>(null);
 
   // Complaints State
@@ -67,6 +68,47 @@ export default function FormalAdminDashboard() {
   const [complaintFilters, setComplaintFilters] = useState({ type: "all", status: "all" });
   const [resolvingId, setResolvingId] = useState<number | null>(null);
   const [resolutionNote, setResolutionNote] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [patients, setPatients] = useState<any[]>([]);
+  const [medicines, setMedicines] = useState<any[]>([]);
+  const [pendingSlots, setPendingSlots] = useState<any[]>([]);
+
+  const checkEmailUnique = async (val: string) => {
+    if (!val || !val.includes("@")) return;
+    try {
+      const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(val)}`);
+      const data = await res.json();
+      if (data.exists) {
+        setEmailError("This email is already registered. Please use a different email.");
+      } else {
+        setEmailError("");
+      }
+    } catch (e) {
+      console.error("Email check failed", e);
+    }
+  };
+
+  const updateMedicinePrice = async (id: string, price: number) => {
+    try {
+      const res = await fetch('/api/medicines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updatePrice', id, price })
+      });
+      if (res.ok) {
+        fetchMedicines();
+        toast({ title: "Price Updated", description: "The medicine price has been synced across the network." });
+      }
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "Could not update price." });
+    }
+  };
+
+  const fetchMedicines = async () => {
+    const res = await fetch('/api/medicines');
+    const data = await res.json();
+    setMedicines(data.medicines || []);
+  };
 
   // Schedule Editor State
   const [selectedDoctor, setSelectedDoctor] = useState("");
@@ -74,6 +116,52 @@ export default function FormalAdminDashboard() {
   const [activeSlots, setActiveSlots] = useState<string[]>([]);
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [newSlotValue, setNewSlotValue] = useState("");
+
+  // ── Medication Time Slot Configurator ─────────────────────────────────────
+  interface MedSlot { label: string; display: string; hour: number; minute: number; }
+  const DEFAULT_MED_SLOTS: MedSlot[] = [
+    { label: "Morning", display: "Morning (8 AM)", hour: 8, minute: 0 },
+    { label: "Afternoon", display: "Afternoon (1 PM)", hour: 13, minute: 0 },
+    { label: "Evening", display: "Evening (6 PM)", hour: 18, minute: 0 },
+    { label: "Night", display: "Night (9 PM)", hour: 21, minute: 0 },
+  ];
+  const loadMedSlots = (): MedSlot[] => {
+    try {
+      const s = localStorage.getItem("mediflow_med_time_slots");
+      if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) return p; }
+    } catch { }
+    return DEFAULT_MED_SLOTS;
+  };
+  const [medSlots, setMedSlots] = useState<MedSlot[]>(DEFAULT_MED_SLOTS);
+  const [newMedLabel, setNewMedLabel] = useState("");
+  const [newMedTime, setNewMedTime] = useState("08:00"); // 24h format input
+
+  useEffect(() => { setMedSlots(loadMedSlots()); }, []);
+
+  const saveMedSlots = (updated: MedSlot[]) => {
+    setMedSlots(updated);
+    localStorage.setItem("mediflow_med_time_slots", JSON.stringify(updated));
+    toast({ title: "✅ Time Slots Saved", description: "Doctors will see the updated slots in their prescription writer." });
+  };
+
+  const addMedSlot = () => {
+    if (!newMedLabel.trim() || !newMedTime) return;
+    const [h, m] = newMedTime.split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    const display = `${newMedLabel.trim()} (${h12}:${String(m).padStart(2, "0")} ${ampm})`;
+    const slug = newMedLabel.trim().replace(/\s+/g, "_");
+    const existing = medSlots.find(s => s.label.toLowerCase() === slug.toLowerCase());
+    if (existing) { toast({ variant: "destructive", title: "Duplicate", description: "A slot with this label already exists." }); return; }
+    saveMedSlots([...medSlots, { label: slug, display, hour: h, minute: m }]);
+    setNewMedLabel("");
+    setNewMedTime("08:00");
+  };
+
+  const removeMedSlot = (label: string) => {
+    saveMedSlots(medSlots.filter(s => s.label !== label));
+  };
+  // ──────────────────────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
     try {
@@ -87,11 +175,25 @@ export default function FormalAdminDashboard() {
       const compData = await compRes.json();
       setComplaints(compData.complaints || []);
 
-      // 3. Update Metrics
+      // 3. Fetch Patients
+      const patientRes = await fetch('/api/patients');
+      const patientData = await patientRes.json();
+      setPatients(patientData.patients || []);
+
+      // 4. Fetch Medicines
+      fetchMedicines();
+
+      // 5. Update Metrics
       const docs = staffData.staff?.filter((s: any) => s.role === 'doctor').length || 0;
       const pharms = staffData.staff?.filter((s: any) => s.role === 'pharmacist').length || 0;
       const pending = compData.complaints?.filter((c: any) => c.status === 'unresolved').length || 0;
-      setMetrics({ doctors: docs, pharmacists: pharms, pendingComplaints: pending });
+
+      const slotsRes = await fetch('/api/admin/schedule?status=pending');
+      const slotsData = await slotsRes.json();
+      setPendingSlots(slotsData.slots || []);
+      const pendingSlotsCount = slotsData.slots?.length || 0;
+
+      setMetrics({ doctors: docs, pharmacists: pharms, pendingComplaints: pending, pendingSlots: pendingSlotsCount });
 
     } catch (err) {
       toast({ variant: "destructive", title: "API Sync Failure", description: "Database connection intermittent." });
@@ -102,9 +204,18 @@ export default function FormalAdminDashboard() {
     fetchData();
   }, [fetchData]);
 
+  const handleStaffPhoneInput = (val: string) => {
+    if (!val.startsWith("+91")) {
+      setNewStaff({ ...newStaff, phone: "+91 " });
+      return;
+    }
+    const digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
+    setNewStaff({ ...newStaff, phone: "+91 " + digits });
+  };
+
   const handleOnboardStaff = async () => {
-    if (!newStaff.email || !newStaff.password) {
-      toast({ variant: "destructive", title: "Error", description: "All fields are required for credential generation." });
+    if (!newStaff.email || !newStaff.password || newStaff.phone.replace(/\s/g, '').length !== 13) {
+      toast({ variant: "destructive", title: "Missing Information", description: "Email, Password and a valid 10-digit Phone number are required." });
       return;
     }
     setLoading(true);
@@ -112,14 +223,19 @@ export default function FormalAdminDashboard() {
       const res = await fetch('/api/admin/staff', {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newStaff)
+        body: JSON.stringify({
+          ...newStaff,
+          phone: newStaff.phone.replace(/\s/g, '')
+        })
       });
       const data = await res.json();
       if (res.ok) {
         setGeneratedCreds(data.credentials);
-        setNewStaff({ name: "", email: "", password: "", role: "doctor", specialization: "", license: "" });
+        setNewStaff({ name: "", email: "", password: "", role: "doctor", specialization: "", license: "", phone: "+91 " });
         fetchData();
         toast({ title: "Success", description: `Credential generated and securely hashed in registry.` });
+      } else {
+        toast({ variant: "destructive", title: "Error", description: data.error || "Failed to onboard staff." });
       }
     } catch (err) {
       toast({ variant: "destructive", title: "Failed", description: "Could not write to secure staff registry." });
@@ -162,6 +278,26 @@ export default function FormalAdminDashboard() {
     setLoading(false);
   };
 
+  const handleApproveSlot = async (id: number) => {
+    await fetch('/api/admin/schedule', {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: "approve", id })
+    });
+    fetchData();
+    toast({ title: "Slot Approved", description: "This slot is now available for patients." });
+  };
+
+  const handleRejectSlot = async (id: number) => {
+    await fetch('/api/admin/schedule', {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: "reject", id })
+    });
+    fetchData();
+    toast({ variant: "destructive", title: "Slot Rejected", description: "The slot request has been removed." });
+  };
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       <SidebarNav role="admin" />
@@ -187,9 +323,15 @@ export default function FormalAdminDashboard() {
             </Card>
             <Card className="p-4 rounded-2xl border-none bg-orange-100 flex items-center gap-4">
               <div className="h-10 w-10 bg-white rounded-xl shadow-sm flex items-center justify-center font-black text-orange-600">
+                {(metrics as any).pendingSlots || 0}
+              </div>
+              <p className="text-[10px] font-black uppercase text-orange-700">Slots</p>
+            </Card>
+            <Card className="p-4 rounded-2xl border-none bg-red-100 flex items-center gap-4">
+              <div className="h-10 w-10 bg-white rounded-xl shadow-sm flex items-center justify-center font-black text-red-600">
                 {metrics.pendingComplaints}
               </div>
-              <p className="text-[10px] font-black uppercase text-orange-700">Alerts</p>
+              <p className="text-[10px] font-black uppercase text-red-700">Alerts</p>
             </Card>
           </div>
         </header>
@@ -198,23 +340,70 @@ export default function FormalAdminDashboard() {
           <TabsList className="bg-white p-1 rounded-2xl border h-16 shadow-lg inline-flex">
             <TabsTrigger value="overview" className="rounded-xl px-10 h-full data-[state=active]:bg-zinc-900 data-[state=active]:text-white font-black text-xs uppercase tracking-widest">Dashboard</TabsTrigger>
             <TabsTrigger value="staff" className="rounded-xl px-10 h-full data-[state=active]:bg-zinc-900 data-[state=active]:text-white font-black text-xs uppercase tracking-widest">Credentials</TabsTrigger>
+            <TabsTrigger value="medicines" className="rounded-xl px-10 h-full data-[state=active]:bg-zinc-900 data-[state=active]:text-white font-black text-xs uppercase tracking-widest">Medicines</TabsTrigger>
             <TabsTrigger value="schedule" className="rounded-xl px-10 h-full data-[state=active]:bg-zinc-900 data-[state=active]:text-white font-black text-xs uppercase tracking-widest">Schedules</TabsTrigger>
+            <TabsTrigger value="approvals" className="rounded-xl px-10 h-full data-[state=active]:bg-zinc-900 data-[state=active]:text-white font-black text-xs uppercase tracking-widest">
+              Approvals
+              {pendingSlots.length > 0 && <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-0.5 text-[8px]">{pendingSlots.length}</span>}
+            </TabsTrigger>
             <TabsTrigger value="complaints" className="rounded-xl px-10 h-full data-[state=active]:bg-zinc-900 data-[state=active]:text-white font-black text-xs uppercase tracking-widest">Complaints</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="animate-in fade-in slide-in-from-bottom-2 duration-400">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+              <Card className="rounded-[3rem] border-none shadow-xl bg-white overflow-hidden lg:col-span-3">
+                <header className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
+                  <h2 className="text-xl font-black uppercase font-headline">Registered Patients</h2>
+                  <Badge variant="outline">{patients.length} Enrolled</Badge>
+                </header>
+                <CardContent className="p-0 max-h-[400px] overflow-y-auto scrollbar-hide">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                      <TableRow>
+                        <TableHead className="pl-8">NAME</TableHead>
+                        <TableHead>EMAIL</TableHead>
+                        <TableHead>PHONE</TableHead>
+                        <TableHead className="text-right pr-8">REG. DATE</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {patients.map(p => (
+                        <TableRow key={p.id} className="hover:bg-slate-50 transition-colors">
+                          <TableCell className="pl-8 font-bold py-6">{p.firstName} {p.lastName}</TableCell>
+                          <TableCell>{p.email}</TableCell>
+                          <TableCell>{p.phone}</TableCell>
+                          <TableCell className="text-right pr-8 font-mono text-[10px]">{new Date(p.registeredAt).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="rounded-[3rem] border-none shadow-xl bg-white overflow-hidden">
                 <header className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
-                  <h2 className="text-xl font-black uppercase font-headline">Clinical Staff (Verified)</h2>
+                  <h2 className="text-xl font-black uppercase font-headline">Clinical Staff (Doctors)</h2>
                   <Badge variant="outline">{metrics.doctors} Registered</Badge>
                 </header>
                 <CardContent className="p-0 max-h-[500px] overflow-y-auto scrollbar-hide">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm"><TableRow><TableHead className="pl-8">NAME</TableHead><TableHead>SPECIALTY</TableHead><TableHead className="text-right pr-8">STATUS</TableHead></TableRow></TableHeader>
+                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                      <TableRow>
+                        <TableHead className="pl-8">NAME</TableHead>
+                        <TableHead>SPECIALTY</TableHead>
+                        <TableHead>EMAIL</TableHead>
+                        <TableHead className="text-right pr-8">STATUS</TableHead>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
                       {staff.filter(s => s.role === 'doctor').map(d => (
-                        <TableRow key={d.id} className="hover:bg-slate-50 transition-colors"><TableCell className="pl-8 font-bold py-6">{d.name}</TableCell><TableCell>{d.specialization}</TableCell><TableCell className="text-right pr-8"><Badge className="bg-green-100 text-green-700">ACTIVE</Badge></TableCell></TableRow>
+                        <TableRow key={d.id} className="hover:bg-slate-50 transition-colors">
+                          <TableCell className="pl-8 font-bold py-6">{d.name}</TableCell>
+                          <TableCell>{d.specialization}</TableCell>
+                          <TableCell className="text-xs">{d.email}</TableCell>
+                          <TableCell className="text-right pr-8"><Badge className="bg-green-100 text-green-700">ACTIVE</Badge></TableCell>
+                        </TableRow>
                       ))}
                     </TableBody>
                   </Table>
@@ -227,10 +416,22 @@ export default function FormalAdminDashboard() {
                 </header>
                 <CardContent className="p-0 max-h-[500px] overflow-y-auto scrollbar-hide">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm"><TableRow><TableHead className="pl-8">NAME</TableHead><TableHead>OFFICE</TableHead><TableHead className="text-right pr-8">STATUS</TableHead></TableRow></TableHeader>
+                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                      <TableRow>
+                        <TableHead className="pl-8">NAME</TableHead>
+                        <TableHead>OFFICE</TableHead>
+                        <TableHead>EMAIL</TableHead>
+                        <TableHead className="text-right pr-8">STATUS</TableHead>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
                       {staff.filter(s => s.role === 'pharmacist').map(p => (
-                        <TableRow key={p.id} className="hover:bg-slate-50 transition-colors"><TableCell className="pl-8 font-bold py-6">{p.name}</TableCell><TableCell>{p.pharmacyId || "Global Warehouse"}</TableCell><TableCell className="text-right pr-8"><Badge className="bg-blue-100 text-blue-700">AUTHORIZED</Badge></TableCell></TableRow>
+                        <TableRow key={p.id} className="hover:bg-slate-50 transition-colors">
+                          <TableCell className="pl-8 font-bold py-6">{p.name}</TableCell>
+                          <TableCell>{p.pharmacyId || "Global Warehouse"}</TableCell>
+                          <TableCell className="text-xs">{p.email}</TableCell>
+                          <TableCell className="text-right pr-8"><Badge className="bg-blue-100 text-blue-700">AUTHORIZED</Badge></TableCell>
+                        </TableRow>
                       ))}
                     </TableBody>
                   </Table>
@@ -252,12 +453,23 @@ export default function FormalAdminDashboard() {
                     <Input value={newStaff.name} onChange={e => setNewStaff({ ...newStaff, name: e.target.value })} placeholder="Dr. Sarah Johnson" className="h-14 rounded-2xl border-2 font-bold" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Official ID</Label>
-                    <Input value={newStaff.email} onChange={e => setNewStaff({ ...newStaff, email: e.target.value })} placeholder="staff-name@mediflow.com" className="h-14 rounded-2xl border-2 font-bold" />
+                    <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Official ID (Email)</Label>
+                    <Input
+                      value={newStaff.email}
+                      onChange={e => {
+                        setNewStaff({ ...newStaff, email: e.target.value });
+                        checkEmailUnique(e.target.value);
+                      }}
+                      placeholder="staff-name@mediflow.com"
+                      className={`h-14 rounded-2xl border-2 font-bold ${emailError ? 'border-red-500' : ''}`}
+                    />
+                    {emailError && <p className="text-[10px] text-red-600 font-bold ml-1">{emailError}</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Initial Password</Label>
+                      <div className="flex justify-between items-center px-1">
+                        <Label className="text-[10px] font-black uppercase tracking-widest">Initial Password</Label>
+                      </div>
                       <Input type="password" value={newStaff.password} onChange={e => setNewStaff({ ...newStaff, password: e.target.value })} className="h-14 rounded-2xl border-2 font-bold" />
                     </div>
                     <div className="space-y-2">
@@ -271,13 +483,47 @@ export default function FormalAdminDashboard() {
                       </Select>
                     </div>
                   </div>
+
+                  {/* Password Rules Hint */}
+                  <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed space-y-1">
+                    <p className="text-[9px] font-black uppercase text-zinc-400 tracking-widest mb-1">Password Requirements</p>
+                    <div className="flex items-center gap-2">
+                      <div className={`h-1.5 w-1.5 rounded-full ${newStaff.password.length >= 8 ? 'bg-green-500' : 'bg-slate-300'}`} />
+                      <span className={`text-[10px] font-bold ${newStaff.password.length >= 8 ? 'text-green-700' : 'text-slate-400'}`}>8+ Characters</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`h-1.5 w-1.5 rounded-full ${/[0-9]/.test(newStaff.password) ? 'bg-green-500' : 'bg-slate-300'}`} />
+                      <span className={`text-[10px] font-bold ${/[0-9]/.test(newStaff.password) ? 'text-green-700' : 'text-slate-400'}`}>One Number</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`h-1.5 w-1.5 rounded-full ${/[!@#$%^&*]/.test(newStaff.password) ? 'bg-green-500' : 'bg-slate-300'}`} />
+                      <span className={`text-[10px] font-bold ${/[!@#$%^&*]/.test(newStaff.password) ? 'text-green-700' : 'text-slate-400'}`}>One Special Char</span>
+                    </div>
+                  </div>
+
                   {newStaff.role === 'doctor' && (
                     <div className="space-y-2 animate-in slide-in-from-top-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Specialization</Label>
                       <Input value={newStaff.specialization} onChange={e => setNewStaff({ ...newStaff, specialization: e.target.value })} className="h-14 rounded-2xl border-2 font-bold" />
                     </div>
                   )}
-                  <Button className="w-full h-16 rounded-[2rem] bg-zinc-900 text-lg font-black tracking-tighter shadow-2xl shadow-zinc-200 mt-4" onClick={handleOnboardStaff} disabled={loading}>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Phone Number (India)</Label>
+                    <Input
+                      value={newStaff.phone}
+                      onChange={e => handleStaffPhoneInput(e.target.value)}
+                      placeholder="+91 00000 00000"
+                      className="h-14 rounded-2xl border-2 font-bold"
+                    />
+                    <p className="text-[9px] text-muted-foreground italic ml-1">Format: +91 followed by 10 digits</p>
+                  </div>
+
+                  <Button
+                    className="w-full h-16 rounded-[2rem] bg-zinc-900 text-lg font-black tracking-tighter shadow-2xl shadow-zinc-200 mt-4"
+                    onClick={handleOnboardStaff}
+                    disabled={loading || !!emailError || newStaff.password.length < 8 || !/[0-9]/.test(newStaff.password) || !/[!@#$%^&*]/.test(newStaff.password)}
+                  >
                     {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : "GENERATE & SYNC CREDS"}
                   </Button>
                 </div>
@@ -322,6 +568,61 @@ export default function FormalAdminDashboard() {
             </div>
           </TabsContent>
 
+          <TabsContent value="medicines" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
+            <Card className="rounded-[3rem] border-none shadow-xl bg-white overflow-hidden">
+              <header className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-black uppercase font-headline tracking-tighter">Pharmacy Price Control</h2>
+                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Global Unit Pricing & Stock propagation</p>
+                </div>
+                <Badge variant="outline" className="h-10 px-6 rounded-xl font-black">{medicines.length} Stocked Items</Badge>
+              </header>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-slate-50/50">
+                    <TableRow>
+                      <TableHead className="pl-10 py-6 uppercase tracking-widest text-[10px] font-bold">Medicine Name</TableHead>
+                      <TableHead className="uppercase tracking-widest text-[10px] font-bold">Category</TableHead>
+                      <TableHead className="uppercase tracking-widest text-[10px] font-bold">Current Price (Unit)</TableHead>
+                      <TableHead className="uppercase tracking-widest text-[10px] font-bold">Update Pricing</TableHead>
+                      <TableHead className="text-right pr-10 uppercase tracking-widest text-[10px] font-bold">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {medicines.map(med => (
+                      <TableRow key={med.id} className="hover:bg-slate-50 transition-colors">
+                        <TableCell className="pl-10 py-6">
+                          <p className="font-bold text-lg">{med.name}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase font-black">{med.manufacturer}</p>
+                        </TableCell>
+                        <TableCell><Badge variant="secondary" className="rounded-lg">{med.category}</Badge></TableCell>
+                        <TableCell className="text-2xl font-black text-primary">₹{med.price}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-muted-foreground">₹</span>
+                            <Input
+                              type="number"
+                              defaultValue={med.price}
+                              className="w-24 h-10 rounded-xl font-bold"
+                              onBlur={(e) => {
+                                if (Number(e.target.value) !== med.price) {
+                                  updateMedicinePrice(med.id, Number(e.target.value));
+                                }
+                              }}
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right pr-10">
+                          <Button variant="outline" className="rounded-xl font-bold h-10 px-4">Update</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="schedule" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
               <Card className="lg:col-span-4 rounded-[3rem] shadow-2xl p-10 bg-white space-y-8 h-fit">
@@ -342,7 +643,13 @@ export default function FormalAdminDashboard() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Select Clinic Date</Label>
-                    <Input type="date" className="h-16 rounded-2xl border-2 text-lg font-bold" value={selectedDate} onChange={e => { setSelectedDate(e.target.value); if (selectedDoctor) fetchSlots(selectedDoctor, e.target.value); }} />
+                    <Input
+                      type="date"
+                      className="h-16 rounded-2xl border-2 text-lg font-bold"
+                      value={selectedDate}
+                      onChange={e => { setSelectedDate(e.target.value); if (selectedDoctor) fetchSlots(selectedDoctor, e.target.value); }}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
                   </div>
                 </div>
               </Card>
@@ -425,6 +732,126 @@ export default function FormalAdminDashboard() {
                 </Card>
               </div>
             </div>
+
+            {/* ── Medication Time Slots Configurator ───────────────────────── */}
+            <Card className="rounded-[3rem] border-none shadow-xl bg-white overflow-hidden">
+              <header className="p-8 border-b bg-emerald-50 flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tighter font-headline flex items-center gap-3">
+                    <Pill className="h-6 w-6 text-emerald-600" />
+                    Medication Time Slots
+                  </h3>
+                  <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mt-1">
+                    Define when doctors can schedule patient medication throughout the day
+                  </p>
+                </div>
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 px-4 py-2 rounded-xl font-black">
+                  {medSlots.length} Slots Active
+                </Badge>
+              </header>
+              <CardContent className="p-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left: Existing slots list */}
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Current Slots</p>
+                    {medSlots.length === 0 ? (
+                      <div className="text-center py-10 border-2 border-dashed rounded-2xl text-muted-foreground italic text-sm">
+                        No slots configured. Add one using the form.
+                      </div>
+                    ) : (
+                      medSlots.map((slot) => (
+                        <div key={slot.label} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-emerald-200 transition-all">
+                          <div>
+                            <p className="font-black text-lg">{slot.display}</p>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">ID: {slot.label}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 rounded-xl hover:bg-red-50 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                            onClick={() => removeMedSlot(slot.label)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Right: Add new slot */}
+                  <div className="space-y-6 p-8 bg-slate-50 rounded-3xl border-2 border-dashed">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Add New Slot</p>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Slot Label</Label>
+                      <Input
+                        placeholder='e.g. "Before Breakfast" or "With Lunch"'
+                        className="h-12 rounded-xl border-2 font-bold"
+                        value={newMedLabel}
+                        onChange={(e) => setNewMedLabel(e.target.value)}
+                      />
+                      <p className="text-[9px] text-muted-foreground italic ml-1">This label appears in the doctor's prescription dropdown</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Time (24h Format)</Label>
+                      <Input
+                        type="time"
+                        className="h-12 rounded-xl border-2 font-bold text-lg"
+                        value={newMedTime}
+                        onChange={(e) => setNewMedTime(e.target.value)}
+                      />
+                      <p className="text-[9px] text-muted-foreground italic ml-1">This is when the medication reminder will trigger for the patient</p>
+                    </div>
+                    <Button
+                      className="w-full h-14 rounded-2xl font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg gap-2"
+                      onClick={addMedSlot}
+                      disabled={!newMedLabel.trim() || !newMedTime}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Slot
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="approvals" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
+            <Card className="rounded-[3rem] border-none shadow-xl bg-white overflow-hidden">
+              <header className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-black uppercase font-headline tracking-tighter">Doctor Slot Requests</h2>
+                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Pending approval for live portal synchronization</p>
+                </div>
+              </header>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-slate-50/50">
+                    <TableRow>
+                      <TableHead className="pl-10 py-6 uppercase tracking-widest text-[10px] font-bold">Doctor</TableHead>
+                      <TableHead className="uppercase tracking-widest text-[10px] font-bold">Date</TableHead>
+                      <TableHead className="uppercase tracking-widest text-[10px] font-bold">Time Slot</TableHead>
+                      <TableHead className="text-right pr-10 uppercase tracking-widest text-[10px] font-bold">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingSlots.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-20 text-zinc-400 italic">No pending slot requests.</TableCell></TableRow>
+                    ) : (
+                      pendingSlots.map(slot => (
+                        <TableRow key={slot.id} className="hover:bg-slate-50 transition-colors">
+                          <TableCell className="pl-10 py-6 font-bold">{slot.docEmail}</TableCell>
+                          <TableCell className="font-medium text-slate-600">{slot.date}</TableCell>
+                          <TableCell><Badge className="text-xl font-black bg-slate-100 text-black border-none">{slot.slot}</Badge></TableCell>
+                          <TableCell className="text-right pr-10 space-x-2">
+                            <Button className="rounded-xl bg-green-600 hover:bg-green-700 h-12 px-6 font-black" onClick={() => handleApproveSlot(slot.id)}>APPROVE</Button>
+                            <Button variant="outline" className="rounded-xl border-2 border-red-200 text-red-600 hover:bg-red-50 h-12 px-6 font-black" onClick={() => handleRejectSlot(slot.id)}>REJECT</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="complaints" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
