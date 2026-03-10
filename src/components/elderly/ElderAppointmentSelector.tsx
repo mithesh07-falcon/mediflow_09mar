@@ -143,8 +143,8 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                 });
             } catch (error) {
                 console.error("AI Analysis failed", error);
-                handleSymptomSelect("fever");
-                toast({ variant: "destructive", title: "Analysis Failed", description: "Could not identify body part. Try manual selection." });
+                // Don't auto-pick 'fever'/General — let user choose manually
+                toast({ variant: "destructive", title: "Analysis Failed", description: "Could not identify body part. Please select manually from the list." });
             } finally {
                 setIsScanning(false);
             }
@@ -184,11 +184,11 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
             handleSymptomSelect(response.symptomId);
         } catch (error) {
             console.error("Scanning failed", error);
-            handleSymptomSelect("fever"); // Fallback
+            // Don't auto-pick 'fever'/General — let user choose manually
             toast({
                 variant: "destructive",
                 title: "Scan Failed",
-                description: "We couldn't clearly see the body part. Please select manually."
+                description: "We couldn't clearly see the body part. Please select manually from the list."
             });
         } finally {
             setIsScanning(false);
