@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 
+// Singleton for Slots Memory (ensures cross-request state in warm serverless instances)
+declare global {
+    var __mediflow_slot_pool: any[] | undefined;
+}
+
 const SLOTS_DB_PATH = path.join(process.cwd(), "data", "slots.json");
 
 async function ensureRegistry() {
@@ -9,23 +14,36 @@ async function ensureRegistry() {
     try {
         await fs.access(dir);
     } catch {
-        await fs.mkdir(dir, { recursive: true });
+        try { await fs.mkdir(dir, { recursive: true }); } catch (e) { }
     }
     try {
         await fs.access(SLOTS_DB_PATH);
     } catch {
-        await fs.writeFile(SLOTS_DB_PATH, JSON.stringify([], null, 2));
+        try { await fs.writeFile(SLOTS_DB_PATH, JSON.stringify([], null, 2)); } catch (e) { }
     }
 }
 
-async function readSlots() {
+async function readSlots(): Promise<any[]> {
+    // Return memory cache first if it exists
+    if (global.__mediflow_slot_pool) return global.__mediflow_slot_pool;
+
     await ensureRegistry();
-    const content = await fs.readFile(SLOTS_DB_PATH, "utf-8");
-    return JSON.parse(content || "[]");
+    try {
+        const content = await fs.readFile(SLOTS_DB_PATH, "utf-8");
+        global.__mediflow_slot_pool = JSON.parse(content || "[]");
+    } catch (err) {
+        global.__mediflow_slot_pool = [];
+    }
+    return global.__mediflow_slot_pool!;
 }
 
 async function writeSlots(slots: any[]) {
-    await fs.writeFile(SLOTS_DB_PATH, JSON.stringify(slots, null, 2));
+    global.__mediflow_slot_pool = slots;
+    try {
+        await fs.writeFile(SLOTS_DB_PATH, JSON.stringify(slots, null, 2));
+    } catch (err) {
+        console.warn("Vercel: Read-only file system. Slot state will exist in memory during this instance.");
+    }
 }
 
 export async function GET(request: Request) {

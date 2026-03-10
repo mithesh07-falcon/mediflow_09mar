@@ -202,6 +202,9 @@ export default function FormalAdminDashboard() {
 
   useEffect(() => {
     fetchData();
+    // Auto-Sync for Live Requests (Interval: 3s)
+    const interval = setInterval(fetchData, 3000);
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   const handleStaffPhoneInput = (val: string) => {
