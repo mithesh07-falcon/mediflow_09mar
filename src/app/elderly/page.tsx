@@ -57,17 +57,33 @@ export default function SeniorCareLoginPage() {
     }
 
     setLoading(true);
+    const emailLower = email.toLowerCase();
+
     try {
+      // 1. Check Browser Cache First (Crucial for Vercel where server DB might be empty)
+      const cachedPatients = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+      const localMatch = cachedPatients.find((p: any) => p.email.toLowerCase() === emailLower);
+
+      if (localMatch) {
+        setGuardianName(`${localMatch.firstName} ${localMatch.lastName || ""}`.trim());
+        setGuardianNumber(localMatch.phone.replace("+91", ""));
+        setIsGuardianVerified(true);
+        toast({ title: "Guardian Linked", description: `Found ${localMatch.firstName} in your local clinical registry.` });
+        setLoading(false);
+        return;
+      }
+
+      // 2. Fallback to Server API for previously existing/seeded accounts
       const res = await fetch("/api/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "verify-guardian", email }),
+        body: JSON.stringify({ action: "verify-guardian", email: emailLower }),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
         setGuardianName(data.guardian.name);
-        setGuardianNumber(data.guardian.phone.replace("+91", "")); // Strip prefix for local display
+        setGuardianNumber(data.guardian.phone.replace("+91", ""));
         setIsGuardianVerified(true);
         toast({ title: "Guardian Linked", description: `Found ${data.guardian.name}. Details auto-populated.` });
       } else {
@@ -76,7 +92,7 @@ export default function SeniorCareLoginPage() {
         toast({
           variant: "destructive",
           title: "Verification Failed",
-          description: data.error || "Guardian profile not found in our patient network."
+          description: data.error || "Guardian profile not found. Please ensure they are registered as a patient."
         });
       }
     } catch (err) {
