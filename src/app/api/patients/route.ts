@@ -54,7 +54,11 @@ function readPatients(): PatientRecord[] {
     ensureDataDir();
     if (!fs.existsSync(DATA_FILE)) {
         // First run — seed with default patients
-        fs.writeFileSync(DATA_FILE, JSON.stringify(SEED_PATIENTS, null, 2));
+        try {
+            fs.writeFileSync(DATA_FILE, JSON.stringify(SEED_PATIENTS, null, 2));
+        } catch (err) {
+            console.warn("[API:Patients] Could not write seed file to disk (Read-only FS). Using memory.");
+        }
         return [...SEED_PATIENTS];
     }
     try {
@@ -66,8 +70,14 @@ function readPatients(): PatientRecord[] {
 }
 
 function writePatients(patients: PatientRecord[]) {
-    ensureDataDir();
-    fs.writeFileSync(DATA_FILE, JSON.stringify(patients, null, 2));
+    try {
+        ensureDataDir();
+        fs.writeFileSync(DATA_FILE, JSON.stringify(patients, null, 2));
+    } catch (err) {
+        console.error("[API:Patients] Persistence Error (Write failed):", err);
+        // On Vercel, this will fail. We log it but don't crash the request.
+        // Data will only live in the current server instance's memory.
+    }
 }
 
 // ── GET /api/patients — List all patients (no passwords) ─────────
@@ -247,8 +257,23 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json({ error: "Invalid action. Use 'login' or 'register'." }, { status: 400 });
-    } catch (err) {
-        return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    } catch (err: any) {
+        console.error("[API:Patients] Fatal Error:", err);
+
+        // Improve error message to help the USER troubleshoot
+        let errorMessage = "An unexpected error occurred.";
+        if (err instanceof SyntaxError) {
+            errorMessage = "Invalid JSON request body.";
+        } else if (err.code === 'EROFS') {
+            errorMessage = "Server error: File system is read-only (common on Vercel/Hosting). Registration failed to persist.";
+        } else if (err.message) {
+            errorMessage = err.message;
+        }
+
+        return NextResponse.json({
+            error: errorMessage,
+            details: process.env.NODE_ENV === 'development' ? err.toString() : undefined
+        }, { status: 500 }); // Changed to 500 for server-side errors
     }
 }
 
