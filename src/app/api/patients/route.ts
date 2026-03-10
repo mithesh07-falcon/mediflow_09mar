@@ -44,9 +44,14 @@ const SEED_PATIENTS: PatientRecord[] = [
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function ensureDataDir() {
-    const dir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+    try {
+        const dir = path.dirname(DATA_FILE);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+    } catch (err) {
+        // Silently fail - Vercel lambda environment doesn't allow mkdir in /var/task
+        console.warn("[API:Patients] Could not create data directory. File persistence will be disabled.");
     }
 }
 
