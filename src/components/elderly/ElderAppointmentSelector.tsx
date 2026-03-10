@@ -35,6 +35,7 @@ export interface AppointmentRequest {
     timePreferenceCode: string; // "morning", "afternoon", "evening"
     timePreferenceLabel: string;
     predictedDoctorName?: string;
+    reason?: string;
 }
 
 interface ElderAppointmentSelectorProps {
@@ -50,6 +51,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [staff, setStaff] = useState<any[]>([]);
     const [predictedDoctor, setPredictedDoctor] = useState<string | null>(null);
+    const [scanReason, setScanReason] = useState<string | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -133,11 +135,12 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                 });
 
                 setPredictedDoctor(response.predictedDoctorName);
+                setScanReason(response.reason);
+                handleSymptomSelect(response.symptomId); // This will set step to 2
                 toast({
                     title: "AI Analysis Complete",
                     description: `I recommend ${response.predictedDoctorName} for your ${response.specialistType}. ${response.reason}`
                 });
-                handleSymptomSelect(response.symptomId);
             } catch (error) {
                 console.error("AI Analysis failed", error);
                 handleSymptomSelect("fever");
@@ -216,7 +219,8 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
             specialist: symptom.specialist,
             timePreferenceCode: timePref.id,
             timePreferenceLabel: timePref.label,
-            predictedDoctorName: predictedDoctor || undefined
+            predictedDoctorName: predictedDoctor || undefined,
+            reason: scanReason || undefined
         });
     };
 
