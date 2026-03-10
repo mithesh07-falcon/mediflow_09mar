@@ -113,19 +113,38 @@ export default function MySchedulePage() {
             });
             const data = await res.json();
 
-            if (res.ok && data.appointments) {
-                // Sort: most recent first
-                const sorted = [...data.appointments].sort((a, b) => {
-                    const da = new Date(`${a.date} ${a.time}`);
-                    const db = new Date(`${b.date} ${b.time}`);
-                    return db.getTime() - da.getTime();
-                });
-                setAppointments(sorted);
-            } else {
-                setError(data.error || "Could not fetch appointments.");
-            }
+            // ── HYBRID SYNC: Combine server data with client cache ────────────────
+            const apiAppts = data.appointments || [];
+            const localAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
+
+            // Deduplicate: If an appointment has the same date, time, and patient, only keep the server version
+            const combined = [...apiAppts];
+            localAppts.forEach((l: any) => {
+                const exists = apiAppts.some((a: any) =>
+                    a.date === l.date &&
+                    a.time === l.time &&
+                    a.patient === l.patient
+                );
+                if (!exists) combined.push(l);
+            });
+
+            // Clean up: Filter for current user only
+            const filteredAppts = combined.filter((a: any) =>
+                (a.patientEmail?.toLowerCase() === user.email?.toLowerCase()) ||
+                (a.patient.toLowerCase() === user.firstName.toLowerCase())
+            );
+
+            // Sort: most recent first
+            const sorted = filteredAppts.sort((a: any, b: any) => {
+                const da = new Date(`${a.date} ${a.time}`);
+                const db = new Date(`${b.date} ${b.time}`);
+                return db.getTime() - da.getTime();
+            });
+            setAppointments(sorted);
         } catch (e) {
-            setError("Network error. Please try again.");
+            console.warn("Clinical sync failed, falling back to local storage.");
+            const localAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
+            setAppointments(localAppts);
         } finally {
             setLoading(false);
         }
@@ -210,14 +229,14 @@ export default function MySchedulePage() {
                             key={f}
                             onClick={() => setFilter(f)}
                             className={`px-5 py-2 rounded-full text-sm font-bold border-2 transition-all capitalize ${filter === f
-                                    ? f === "missed"
-                                        ? "bg-red-500 border-red-500 text-white shadow-md"
-                                        : f === "upcoming"
-                                            ? "bg-emerald-500 border-emerald-500 text-white shadow-md"
-                                            : f === "completed"
-                                                ? "bg-slate-500 border-slate-500 text-white shadow-md"
-                                                : "bg-primary border-primary text-white shadow-md"
-                                    : "bg-white dark:bg-zinc-900 border-border text-muted-foreground hover:border-primary/40"
+                                ? f === "missed"
+                                    ? "bg-red-500 border-red-500 text-white shadow-md"
+                                    : f === "upcoming"
+                                        ? "bg-emerald-500 border-emerald-500 text-white shadow-md"
+                                        : f === "completed"
+                                            ? "bg-slate-500 border-slate-500 text-white shadow-md"
+                                            : "bg-primary border-primary text-white shadow-md"
+                                : "bg-white dark:bg-zinc-900 border-border text-muted-foreground hover:border-primary/40"
                                 }`}
                         >
                             {f} ({counts[f]})
@@ -268,10 +287,10 @@ export default function MySchedulePage() {
                                         {/* Date Badge */}
                                         <div
                                             className={`min-w-[72px] text-center p-3 rounded-2xl font-bold flex flex-col items-center ${config.dotClass === "bg-red-500"
-                                                    ? "bg-red-500 text-white"
-                                                    : config.dotClass === "bg-emerald-500"
-                                                        ? "bg-emerald-500 text-white"
-                                                        : "bg-slate-400 text-white"
+                                                ? "bg-red-500 text-white"
+                                                : config.dotClass === "bg-emerald-500"
+                                                    ? "bg-emerald-500 text-white"
+                                                    : "bg-slate-400 text-white"
                                                 }`}
                                         >
                                             {appt.date ? (

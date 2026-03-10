@@ -83,43 +83,54 @@ export default function PatientDashboard() {
         });
         const data = await res.json();
 
-        if (res.ok && data.appointments) {
-          const now = new Date();
+        // ── HYBRID SYNC: Merge Server Data with Browser Cache ────────────────
+        const apiAppts = data.appointments || [];
+        const localAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
 
-          const upcomingAppts = data.appointments
-            .filter((a: any) => {
-              if (!a.patient) return false;
-              const patientName = a.patient.toLowerCase();
-              const matchesFamily = membersList.some(m => m.name && m.name.toLowerCase() === patientName);
-              const matchesSelf = patientName === (user.firstName || "").toLowerCase();
-              if (!matchesFamily && !matchesSelf) return false;
+        const combined = [...apiAppts];
+        localAppts.forEach((l: any) => {
+          const exists = apiAppts.some((a: any) => a.date === l.date && a.time === l.time && a.patient === l.patient);
+          if (!exists) combined.push(l);
+        });
 
-              // Filter out completed/cancelled/missed statuses
-              const s = (a.status || "").toLowerCase();
-              if (s === "completed" || s === "done" || s === "missed" || s === "cancelled") return false;
+        const now = new Date();
 
-              // Filter out past appointments
-              try {
-                const apptDate = new Date(`${a.date} ${a.time}`);
-                return !isNaN(apptDate.getTime()) && apptDate > now;
-              } catch {
-                return false;
-              }
-            })
-            .sort((a: any, b: any) => {
-              const dateA = new Date(`${a.date} ${a.time}`).getTime();
-              const dateB = new Date(`${b.date} ${b.time}`).getTime();
-              return dateA - dateB;
-            });
+        const upcomingAppts = combined
+          .filter((a: any) => {
+            if (!a.patient) return false;
+            const patientName = a.patient.toLowerCase();
+            const matchesFamily = membersList.some(m => m.name && m.name.toLowerCase() === patientName);
+            const matchesSelf = patientName === (user.firstName || "").toLowerCase();
+            if (!matchesFamily && !matchesSelf) return false;
 
-          if (upcomingAppts.length > 0) {
-            setNextAppointment(upcomingAppts[0]);
-          } else {
-            setNextAppointment(null);
-          }
+            // Filter out completed/cancelled/missed statuses
+            const s = (a.status || "").toLowerCase();
+            if (s === "completed" || s === "done" || s === "missed" || s === "cancelled") return false;
+
+            // Filter out past appointments
+            try {
+              const apptDate = new Date(`${a.date} ${a.time}`);
+              return !isNaN(apptDate.getTime()) && apptDate > now;
+            } catch {
+              return false;
+            }
+          })
+          .sort((a: any, b: any) => {
+            const dateA = new Date(`${a.date} ${a.time}`).getTime();
+            const dateB = new Date(`${b.date} ${b.time}`).getTime();
+            return dateA - dateB;
+          });
+
+        if (upcomingAppts.length > 0) {
+          setNextAppointment(upcomingAppts[0]);
+        } else {
+          setNextAppointment(null);
         }
       } catch (e) {
         console.error("Clinical Appt Parse Error", e);
+        // Deep Fallback: Just use local storage if API is completely broken
+        const localAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
+        if (localAppts.length > 0) setNextAppointment(localAppts[0]);
       }
     };
 

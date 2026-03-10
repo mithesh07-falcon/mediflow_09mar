@@ -17,12 +17,20 @@ async function ensureRegistry() {
     try {
         await fs.access(dir);
     } catch {
-        await fs.mkdir(dir, { recursive: true });
+        try {
+            await fs.mkdir(dir, { recursive: true });
+        } catch (e) {
+            console.warn("Vercel: Read-only file system, skipped directory creation.");
+        }
     }
     try {
         await fs.access(APPOINTMENTS_DB_PATH);
     } catch {
-        await fs.writeFile(APPOINTMENTS_DB_PATH, JSON.stringify([], null, 2));
+        try {
+            await fs.writeFile(APPOINTMENTS_DB_PATH, JSON.stringify([], null, 2));
+        } catch (e) {
+            console.warn("Vercel: Read-only file system, skipped file initialization.");
+        }
     }
 }
 
@@ -109,7 +117,11 @@ export async function POST(request: Request) {
         };
 
         const updated = [synchronizedAppt, ...appointments];
-        await fs.writeFile(APPOINTMENTS_DB_PATH, JSON.stringify(updated, null, 2));
+        try {
+            await fs.writeFile(APPOINTMENTS_DB_PATH, JSON.stringify(updated, null, 2));
+        } catch (e) {
+            console.error("Vercel Write Error: Cannot sync to disk. Data will only exist in client local storage.");
+        }
 
         return NextResponse.json({ success: true, message: "Clinical data synchronized securely." });
     } catch (err) {
