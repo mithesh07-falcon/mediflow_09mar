@@ -46,3 +46,4 @@ firestore-debug.log
 
 # server data (patient registry)
 /data/
+certificates

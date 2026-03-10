@@ -28,9 +28,9 @@ async function writeSlots(slots: any[]) {
     await fs.writeFile(SLOTS_DB_PATH, JSON.stringify(slots, null, 2));
 }
 
-export async function GET(request: URL | Request) {
+export async function GET(request: Request) {
     try {
-        const { searchParams } = new URL(request instanceof Request ? request.url : request);
+        const { searchParams } = new URL(request.url);
         const docEmail = searchParams.get("docEmail");
         const date = searchParams.get("date");
         const status = searchParams.get("status"); // 'pending', 'approved'

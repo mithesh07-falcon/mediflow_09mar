@@ -30,6 +30,8 @@ export default function SeniorCareLoginPage() {
   const [generatedOtp, setGeneratedOtp] = useState("");
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("English");
+  const [existingUserData, setExistingUserData] = useState<any>(null);
+
 
   const languages = [
     { name: "English", native: "English" },
@@ -115,12 +117,14 @@ export default function SeniorCareLoginPage() {
         return;
       }
       // Load user details for session construction during sign-in
+      setExistingUserData(existingUser);
       setGuardianEmail(existingUser.guardianEmail || "");
       setGuardianName(existingUser.guardianName || "Guardian");
       setGuardianNumber(existingUser.guardianPhone || "");
       setAge(existingUser.age || "60");
       setSelectedLanguage(existingUser.language || "English");
     }
+
 
     setLoading(true);
     setTimeout(() => {
@@ -157,8 +161,9 @@ export default function SeniorCareLoginPage() {
         guardianPhone: guardianNumber.startsWith("+") ? guardianNumber : `+91 ${guardianNumber}`,
         age: age,
         language: selectedLanguage,
-        firstName: mode === "signup" ? finalElderName : (existingUser?.firstName || "Senior User")
+        firstName: mode === "signup" ? finalElderName : (existingUserData?.firstName || "Senior User")
       };
+
       localStorage.setItem("mediflow_current_user", JSON.stringify(senior));
 
       // If registering anew, save them to the global patient pool
@@ -181,8 +186,9 @@ export default function SeniorCareLoginPage() {
       }
 
       const saved = JSON.parse(localStorage.getItem("mediflow_family_members") || "[]");
-      const savedName = mode === "signup" ? finalElderName : (existingUser?.firstName || "Senior User");
+      const savedName = mode === "signup" ? finalElderName : (existingUserData?.firstName || "Senior User");
       const updated = [{ id: "senior-self", name: savedName, relation: "Self", age: age, seed: "42" }, ...saved.filter((m: any) => m.relation !== 'Self')];
+
       localStorage.setItem("mediflow_family_members", JSON.stringify(updated));
 
       setLoading(false);

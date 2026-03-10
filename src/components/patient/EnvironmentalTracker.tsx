@@ -27,12 +27,18 @@ export function EnvironmentalTracker() {
           }
         },
         (error) => {
-          console.error("Geolocation error", error);
+          console.warn("Geolocation error (using fallback):", error);
           // Fallback location (e.g., Delhi, India) if user denies permission
-          getClimateAdvisory({ latitude: 28.6139, longitude: 77.2090 }).then(data => {
-            setAdvisory(data);
-            setLoading(false);
-          });
+          getClimateAdvisory({ latitude: 28.6139, longitude: 77.2090 })
+            .then(data => {
+              setAdvisory(data);
+            })
+            .catch(err => {
+              console.error("Failed to fetch fallback climate data", err);
+            })
+            .finally(() => {
+              setLoading(false);
+            });
         }
       );
     } else {
