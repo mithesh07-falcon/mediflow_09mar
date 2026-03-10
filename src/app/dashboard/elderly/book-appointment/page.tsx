@@ -11,22 +11,28 @@ export default function BookAppointmentPage() {
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [doctorMatch, setDoctorMatch] = useState<AppointmentRequest | null>(null);
+    const [staff, setStaff] = useState<any[]>([]);
     const [consultMode, setConsultMode] = useState<"clinic" | "video">("clinic");
 
-    const getDoctorName = (specialist: string) => {
-        const names: Record<string, string> = {
-            "Cardiologist": "DR. SHARMA",
-            "Orthopedist": "DR. PATEL",
-            "Ophthalmologist": "DR. REDDY",
-            "General Physician": "DR. VERMA",
-            "Dentist": "DR. GUPTA",
-            "ENT": "DR. RAMESH",
-            "Gastroenterology": "DR. IYER",
-            "Neurology": "DR. KRISHNAN",
-            "Dermatology": "DR. MENON",
-            "Pediatrics": "DR. CHOPRA"
+    useEffect(() => {
+        const fetchStaff = async () => {
+            try {
+                const res = await fetch("/api/admin/staff");
+                const data = await res.json();
+                if (data.staff) setStaff(data.staff);
+            } catch (err) {
+                console.error("Failed to fetch clinical staff", err);
+            }
         };
-        return names[specialist] || "DR. ROBERT";
+        fetchStaff();
+
+        const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+        if (!user.isElderly) router.push("/dashboard/patient");
+    }, [router]);
+
+    const getDoctorForSpecialist = (specialist: string) => {
+        const match = staff.find(s => s.role === 'doctor' && s.specialization === specialist);
+        return match ? match.name : "DR. ROBERT (GENERAL)";
     };
 
     const getAppointmentTime = (timePref: string) => {
@@ -34,11 +40,6 @@ export default function BookAppointmentPage() {
         if (timePref === "afternoon") return "Tomorrow at 2:15 PM";
         return "Tomorrow at 6:00 PM";
     };
-
-    useEffect(() => {
-        const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-        if (!user.isElderly) router.push("/dashboard/patient");
-    }, [router]);
 
     const handleSearch = (req: AppointmentRequest) => {
         setLoading(true);
@@ -82,7 +83,7 @@ export default function BookAppointmentPage() {
 
     // SEARCH RESULT SCREEN
     if (doctorMatch) {
-        const doctorName = getDoctorName(doctorMatch.specialist);
+        const doctorName = getDoctorForSpecialist(doctorMatch.specialist);
         const apptTime = getAppointmentTime(doctorMatch.timePreferenceCode);
         const fee = consultMode === "video" ? 300 : 500;
 

@@ -47,10 +47,33 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     const [mode, setMode] = useState<"manual" | "camera">("manual");
     const [selectedSymptom, setSelectedSymptom] = useState<string | null>(null);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
+    const [staff, setStaff] = useState<any[]>([]);
+    const [predictedDoctor, setPredictedDoctor] = useState<string | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        const fetchStaff = async () => {
+            try {
+                const res = await fetch("/api/admin/staff");
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                const data = await res.json();
+                if (data.staff) setStaff(data.staff);
+            } catch (err) {
+                console.error("Clinical staff lookup failed", err);
+                toast({
+                    variant: "destructive",
+                    title: "Staff Lookup Failed",
+                    description: "Could not fetch clinical staff list. Please try again later.",
+                });
+            }
+        };
+        fetchStaff();
+    }, [toast]);
 
 
     useEffect(() => {
@@ -64,18 +87,27 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                         stream = s;
                         if (videoRef.current) {
                             videoRef.current.srcObject = s;
+                            videoRef.current.play().catch(e => console.error("Error playing video stream:", e));
                         }
                     })
                     .catch(err => {
                         console.error("Camera access denied", err);
                         setCameraError("Camera access denied. Please grant permission in your browser settings to use the Live Scan feature.");
+                        toast({
+                            variant: "destructive",
+                            title: "Camera Access Denied",
+                            description: "Please allow camera access to use the AI Scan feature.",
+                        });
                     });
             } else {
                 setCameraError("Live Scan requires a Secure Context (Like localhost or HTTPS). If you are using an IP address, the camera will be disabled by the browser.");
+                toast({
+                    variant: "destructive",
+                    title: "Camera Not Available",
+                    description: "Your browser or environment does not support camera access for Live Scan.",
+                });
             }
         }
-
-
 
         return () => {
             if (stream) {
@@ -93,10 +125,20 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         reader.onload = async (e) => {
             try {
                 const base64Image = (e.target?.result as string).split(",")[1];
-                const response = await detectBodyPart({ imageBase64: base64Image });
-                toast({ title: "Image Analyzed", description: response.reason });
+                const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
+                const response = await detectBodyPart({
+                    imageBase64: base64Image,
+                    staffList: staffJson
+                });
+
+                setPredictedDoctor(response.predictedDoctorName);
+                toast({
+                    title: "AI Analysis Complete",
+                    description: `I recommend ${response.predictedDoctorName} for your ${response.specialistType}. ${response.reason}`
+                });
                 handleSymptomSelect(response.symptomId);
             } catch (error) {
+                console.error("AI Analysis failed", error);
                 handleSymptomSelect("fever");
                 toast({ variant: "destructive", title: "Analysis Failed", description: "Could not identify body part. Try manual selection." });
             } finally {
@@ -107,7 +149,6 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     };
 
     const handleCameraScan = async () => {
-
         setIsScanning(true);
         try {
             if (!videoRef.current || !videoRef.current.srcObject) {
@@ -123,14 +164,17 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
             ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
             const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
 
-            const response = await detectBodyPart({ imageBase64: base64Image });
+            const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
+            const response = await detectBodyPart({
+                imageBase64: base64Image,
+                staffList: staffJson
+            });
 
-            const matchedSymptom = SYMPTOMS_MAP.find(s => s.id === response.symptomId);
-            const specialist = matchedSymptom?.specialist || "General Physician";
+            setPredictedDoctor(response.predictedDoctorName);
 
             toast({
                 title: "Diagnosis Complete!",
-                description: `${matchedSymptom?.label} detected. Booking you a ${specialist}...`,
+                description: `We found ${response.predictedDoctorName} (${response.specialistType}) for you. ${response.reason}`,
             });
 
             handleSymptomSelect(response.symptomId);
@@ -145,7 +189,6 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         } finally {
             setIsScanning(false);
         }
-
     };
 
     const handleSymptomSelect = (symptomId: string) => {
@@ -192,33 +235,43 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
 
             <CardContent className="p-8">
                 {step === 1 && (
-                    <div className="flex bg-slate-100/80 p-1.5 rounded-[2.5rem] mb-10 border-2 border-slate-200/50 shadow-inner">
-                        <button
-                            type="button"
-                            className={cn(
-                                "flex-1 h-14 rounded-[2rem] text-lg font-black transition-all duration-300 flex items-center justify-center gap-2",
-                                mode === "manual"
-                                    ? "bg-black text-white shadow-lg scale-[1.02]"
-                                    : "text-slate-500 hover:bg-white/50"
-                            )}
-                            onClick={() => setMode("manual")}
-                        >
-                            <Hand className={cn("h-5 w-5", mode === "manual" ? "text-primary" : "text-slate-400")} />
-                            <span>MANUAL</span>
-                        </button>
-                        <button
-                            type="button"
-                            className={cn(
-                                "flex-1 h-14 rounded-[2rem] text-lg font-black transition-all duration-300 flex items-center justify-center gap-2",
-                                mode === "camera"
-                                    ? "bg-black text-white shadow-lg scale-[1.02]"
-                                    : "text-slate-500 hover:bg-white/50"
-                            )}
-                            onClick={() => setMode("camera")}
-                        >
-                            <Camera className={cn("h-5 w-5", mode === "camera" ? "text-green-400" : "text-slate-400")} />
-                            <span>CAMERA</span>
-                        </button>
+                    <div className="space-y-6 mb-10 text-center animate-in fade-in zoom-in-95 duration-500">
+                        <p className="text-3xl font-black uppercase text-slate-800">Choose how to find a doctor:</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <button
+                                type="button"
+                                className={cn(
+                                    "flex flex-col items-center justify-center p-8 rounded-[3rem] border-8 transition-all duration-300 gap-4 group",
+                                    mode === "camera"
+                                        ? "bg-black text-white border-black shadow-2xl scale-[1.05]"
+                                        : "bg-white text-slate-500 border-slate-200 hover:border-black/50"
+                                )}
+                                onClick={() => setMode("camera")}
+                            >
+                                <div className={cn("p-6 rounded-full group-hover:bg-primary/20", mode === "camera" ? "bg-white/10" : "bg-slate-50")}>
+                                    <Camera className={cn("h-20 w-20", mode === "camera" ? "text-green-400" : "text-slate-400")} />
+                                </div>
+                                <span className={cn("text-4xl font-black uppercase", mode === "camera" ? "text-white" : "text-black")}>AI SCAN</span>
+                                <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Auto-Detect Body Part</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                className={cn(
+                                    "flex flex-col items-center justify-center p-8 rounded-[3rem] border-8 transition-all duration-300 gap-4 group",
+                                    mode === "manual"
+                                        ? "bg-black text-white border-black shadow-2xl scale-[1.05]"
+                                        : "bg-white text-slate-500 border-slate-200 hover:border-black/50"
+                                )}
+                                onClick={() => setMode("manual")}
+                            >
+                                <div className={cn("p-6 rounded-full group-hover:bg-primary/20", mode === "manual" ? "bg-white/10" : "bg-slate-50")}>
+                                    <Hand className={cn("h-20 w-20", mode === "manual" ? "text-primary" : "text-slate-400")} />
+                                </div>
+                                <span className={cn("text-4xl font-black uppercase", mode === "manual" ? "text-white" : "text-black")}>MANUAL</span>
+                                <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Select From List</span>
+                            </button>
+                        </div>
                     </div>
                 )}
 
