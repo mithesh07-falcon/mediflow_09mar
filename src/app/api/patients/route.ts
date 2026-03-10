@@ -24,10 +24,16 @@ export interface PatientRecord {
     language?: string;
 }
 
+// ── VERCEL HYBRID MEMORY POOL ───────────────────────────────────────────
+// Ensures patient data survives serverless cold starts as long as instance is warm.
+declare global {
+    var __mediflow_patient_pool: PatientRecord[] | undefined;
+}
+
 // Path to the server-side JSON file that persists patient data
 const DATA_FILE = path.join(process.cwd(), "data", "patients.json");
 
-// Default seed patient (always available)
+// Default seed patient
 const SEED_PATIENTS: PatientRecord[] = [
     {
         id: 1,
@@ -41,47 +47,44 @@ const SEED_PATIENTS: PatientRecord[] = [
     },
 ];
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
 function ensureDataDir() {
     try {
         const dir = path.dirname(DATA_FILE);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-    } catch (err) {
-        // Silently fail - Vercel lambda environment doesn't allow mkdir in /var/task
-        console.warn("[API:Patients] Could not create data directory. File persistence will be disabled.");
-    }
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    } catch (err) { }
 }
 
 function readPatients(): PatientRecord[] {
+    // Return memory-pool if already hydrated
+    if (global.__mediflow_patient_pool) return global.__mediflow_patient_pool;
+
     ensureDataDir();
     if (!fs.existsSync(DATA_FILE)) {
-        // First run — seed with default patients
+        global.__mediflow_patient_pool = [...SEED_PATIENTS];
         try {
             fs.writeFileSync(DATA_FILE, JSON.stringify(SEED_PATIENTS, null, 2));
         } catch (err) {
-            console.warn("[API:Patients] Could not write seed file to disk (Read-only FS). Using memory.");
+            console.warn("[API:Patients] Read-only FS: Initializing memory pool with seeds.");
         }
-        return [...SEED_PATIENTS];
+        return global.__mediflow_patient_pool;
     }
+
     try {
         const raw = fs.readFileSync(DATA_FILE, "utf-8");
-        return JSON.parse(raw);
+        global.__mediflow_patient_pool = JSON.parse(raw);
     } catch {
-        return [...SEED_PATIENTS];
+        global.__mediflow_patient_pool = [...SEED_PATIENTS];
     }
+    return global.__mediflow_patient_pool!;
 }
 
 function writePatients(patients: PatientRecord[]) {
+    global.__mediflow_patient_pool = patients;
     try {
         ensureDataDir();
         fs.writeFileSync(DATA_FILE, JSON.stringify(patients, null, 2));
     } catch (err) {
-        console.error("[API:Patients] Persistence Error (Write failed):", err);
-        // On Vercel, this will fail. We log it but don't crash the request.
-        // Data will only live in the current server instance's memory.
+        console.warn("[API:Patients] Write failed (Read-only OS). Data exists in instance memory.");
     }
 }
 

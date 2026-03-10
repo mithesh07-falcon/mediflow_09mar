@@ -57,7 +57,7 @@ export default function SeniorCareLoginPage() {
     }
 
     setLoading(true);
-    const emailLower = email.toLowerCase();
+    const emailLower = email.trim().toLowerCase();
 
     try {
       // 1. Check Browser Cache First (Crucial for Vercel where server DB might be empty)
