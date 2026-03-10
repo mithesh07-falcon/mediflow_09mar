@@ -22,7 +22,45 @@ const AIDoctorRecommendationOutputSchema = z.object({
 export type AIDoctorRecommendationOutput = z.infer<typeof AIDoctorRecommendationOutputSchema>;
 
 export async function aiDoctorRecommendation(input: AIDoctorRecommendationInput): Promise<AIDoctorRecommendationOutput> {
-  return aiDoctorRecommendationFlow(input);
+  try {
+    return await aiDoctorRecommendationFlow(input);
+  } catch (err) {
+    console.warn("[AI:Fallback] Genkit flow failed, engaging Clinical Rule Engine fallback.");
+
+    const s = input.symptoms.toLowerCase();
+
+    // ── Clinical Rule Engine (Fallback) ──────────────────────────────────
+    if (s.includes('heart') || s.includes('chest') || s.includes('palpitation') || s.includes('breathless')) {
+      return { recommendedSpecialist: "Cardiology", reason: "Symptoms suggest potential cardiovascular involvement. Evaluated via Clinical Rule Engine (Backup)." };
+    }
+    if (s.includes('throat') || s.includes('ear') || s.includes('nose') || s.includes('tonsil') || s.includes('sinus')) {
+      return { recommendedSpecialist: "ENT", reason: "Keywords related to Ear, Nose, or Throat detected. Evaluated via Clinical Rule Engine (Backup)." };
+    }
+    if (s.includes('stomach') || s.includes('gastric') || s.includes('acidity') || s.includes('digestion') || s.includes('belly')) {
+      return { recommendedSpecialist: "Gastroenterology", reason: "Gastrointestinal symptoms identified. Evaluated via Clinical Rule Engine (Backup)." };
+    }
+    if (s.includes('headache') || s.includes('brain') || s.includes('numb') || s.includes('seizure') || s.includes('migraine')) {
+      return { recommendedSpecialist: "Neurology", reason: "Neurological indicators detected. Evaluated via Clinical Rule Engine (Backup)." };
+    }
+    if (s.includes('eye') || s.includes('vision') || s.includes('sight') || s.includes('blur')) {
+      return { recommendedSpecialist: "Ophthalmology", reason: "Ophthalmic symptoms identified. Evaluated via Clinical Rule Engine (Backup)." };
+    }
+    if (s.includes('bone') || s.includes('joint') || s.includes('muscle') || s.includes('back') || s.includes('fracture')) {
+      return { recommendedSpecialist: "Orthopedics", reason: "Orthopedic or musculoskeletal keywords found. Evaluated via Clinical Rule Engine (Backup)." };
+    }
+    if (s.includes('kid') || s.includes('child') || s.includes('baby') || s.includes('pediatric')) {
+      return { recommendedSpecialist: "Pediatrics", reason: "Pediatric age group or symptoms detected. Evaluated via Clinical Rule Engine (Backup)." };
+    }
+    if (s.includes('skin') || s.includes('rash') || s.includes('itch') || s.includes('acne')) {
+      return { recommendedSpecialist: "Dermatology", reason: "Dermatological symptoms detected. Evaluated via Clinical Rule Engine (Backup)." };
+    }
+
+    // Final fallback
+    return {
+      recommendedSpecialist: "General Medicine",
+      reason: "General health indicators detected. Starting with a General Physician is recommended for initial triage. (Fallback active)"
+    };
+  }
 }
 
 const prompt = ai.definePrompt({
