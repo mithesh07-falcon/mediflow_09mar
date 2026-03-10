@@ -158,7 +158,27 @@ export default function MultiRoleLoginPage() {
       });
       const result = await res.json();
 
-      const patient = result.patient;
+      let patient = result.patient;
+
+      // FALLBACK: If server doesn't have the user (happens on Vercel resets), check local storage
+      if (!patient) {
+        const localPatients = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+        const matched = localPatients.find((p: any) => p.email.toLowerCase() === email && p.password === password);
+        if (matched) {
+          patient = matched;
+          console.log("MediFlow: Logged in via Local Identity (Server session reset).");
+        }
+      }
+
+      if (!patient) {
+        toast({
+          variant: "destructive",
+          title: "Access Denied",
+          description: result.error || "Invalid credentials. Please check your email and password.",
+        });
+        setLoading(false);
+        return;
+      }
 
       // CROSS-PORTAL GUARD: Prevent pre-registered staff from using patient portal
       if (patient.email.includes('@mediflow.com')) {
@@ -176,8 +196,13 @@ export default function MultiRoleLoginPage() {
       setLoading(false);
       toast({ title: "Access Granted", description: `Welcome back, ${patient.firstName}!` });
       router.push('/dashboard/patient');
-    } catch (err) {
-      toast({ variant: "destructive", title: "Server Error", description: "Could not reach the authentication server." });
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      toast({
+        variant: "destructive",
+        title: "System Exception",
+        description: err.message || "The authentication server encountered a critical error. Please try again."
+      });
       setLoading(false);
     }
   };

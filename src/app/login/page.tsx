@@ -81,20 +81,39 @@ export default function LoginPage() {
         });
         const result = await res.json();
 
-        if (!res.ok || !result.success) {
-          toast({ variant: "destructive", title: "Login Failed", description: result.error || "Check your email/password." });
+        let patient = result.patient;
+
+        // FALLBACK: If server doesn't have the user (happens on Vercel resets), check local storage
+        if (!patient) {
+          const localPool = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+          const matched = localPool.find((p: any) => p.email.toLowerCase() === data.email.toLowerCase() && p.password === data.password);
+          if (matched) {
+            patient = matched;
+          }
+        }
+
+        if (!patient) {
+          toast({
+            variant: "destructive",
+            title: "Login Failed",
+            description: result.error || "Check your email/password."
+          });
           setLoading(false);
           return;
         }
 
-        const patient = result.patient;
         localStorage.setItem("mediflow_current_user", JSON.stringify({ ...patient, role: 'patient' }));
 
         setLoading(false);
         toast({ title: "Access Granted", description: `Welcome back, ${patient.firstName}!` });
         router.push('/dashboard/patient');
-      } catch (err) {
-        toast({ variant: "destructive", title: "Server Error", description: "Could not reach the authentication server." });
+      } catch (err: any) {
+        console.error("Patient Login Error:", err);
+        toast({
+          variant: "destructive",
+          title: "System Exception",
+          description: err.message || "The authentication server encountered a critical error."
+        });
         setLoading(false);
       }
       return;
