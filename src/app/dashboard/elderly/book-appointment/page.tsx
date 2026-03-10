@@ -30,9 +30,29 @@ export default function BookAppointmentPage() {
         if (!user.isElderly) router.push("/dashboard/patient");
     }, [router]);
 
-    const getDoctorForSpecialist = (specialist: string) => {
-        const match = staff.find(s => s.role === 'doctor' && s.specialization === specialist);
-        return match ? match.name : "DR. ROBERT (GENERAL)";
+    const getDoctorForSpecialist = (specialist: string, predictedName?: string) => {
+        if (predictedName && staff.some(s => s.name === predictedName)) {
+            return predictedName;
+        }
+
+        const specLower = specialist?.toLowerCase().trim();
+        console.log(`[Lookup] Searching for: ${specialist}. Predicted: ${predictedName}`);
+
+        const match = staff.find(s =>
+            s.role === 'doctor' &&
+            s.specialization?.toLowerCase().trim() === specLower
+        );
+
+        if (match) return match.name;
+
+        // Second pass: partial match
+        const partialMatch = staff.find(s =>
+            s.role === 'doctor' &&
+            s.specialization?.toLowerCase().includes(specLower || "")
+        );
+        if (partialMatch) return partialMatch.name;
+
+        return staff.find(s => s.role === 'doctor')?.name || "DR. ROBERT (GENERAL)";
     };
 
     const getAppointmentTime = (timePref: string) => {
@@ -83,7 +103,7 @@ export default function BookAppointmentPage() {
 
     // SEARCH RESULT SCREEN
     if (doctorMatch) {
-        const doctorName = getDoctorForSpecialist(doctorMatch.specialist);
+        const doctorName = getDoctorForSpecialist(doctorMatch.specialist, doctorMatch.predictedDoctorName);
         const apptTime = getAppointmentTime(doctorMatch.timePreferenceCode);
         const fee = consultMode === "video" ? 300 : 500;
 

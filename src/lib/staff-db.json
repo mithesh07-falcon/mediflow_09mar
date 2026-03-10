@@ -70,6 +70,54 @@
     "qualifications": "MBBS, MD (Pediatrics), DCH"
   },
   {
+    "id": 11,
+    "name": "Dr. White",
+    "email": "dr.white.ortho@mediflow.com",
+    "passwordHash": "[SECURE_HASH]_T3J0aG9AMjAyNA==",
+    "passwordPlain": "Ortho@2024!",
+    "role": "doctor",
+    "specialization": "Orthopedics",
+    "isVerified": true,
+    "license": "LIC-ORTHO-011",
+    "phone": "+91 98765 00011"
+  },
+  {
+    "id": 12,
+    "name": "Dr. Miller",
+    "email": "dr.miller.skin@mediflow.com",
+    "passwordHash": "[SECURE_HASH]_U2tpbkAyMDI0",
+    "passwordPlain": "Skin@2024!",
+    "role": "doctor",
+    "specialization": "Dermatology",
+    "isVerified": true,
+    "license": "LIC-DERMA-012",
+    "phone": "+91 98765 00012"
+  },
+  {
+    "id": 13,
+    "name": "Dr. Wilson",
+    "email": "dr.wilson.dentist@mediflow.com",
+    "passwordHash": "[SECURE_HASH]_RGVudGlzdEAyMDI0",
+    "passwordPlain": "Dentist@2024!",
+    "role": "doctor",
+    "specialization": "Dentistry",
+    "isVerified": true,
+    "license": "LIC-DENTAL-013",
+    "phone": "+91 98765 00013"
+  },
+  {
+    "id": 14,
+    "name": "Dr. Taylor",
+    "email": "dr.taylor.gen@mediflow.com",
+    "passwordHash": "[SECURE_HASH]_R2VuZXJhbEAyMDI0",
+    "passwordPlain": "General@2024!",
+    "role": "doctor",
+    "specialization": "General",
+    "isVerified": true,
+    "license": "LIC-GEN-014",
+    "phone": "+91 98765 00014"
+  },
+  {
     "id": 10,
     "name": "Dr. Anderson",
     "email": "dr.anderson.eyes@mediflow.com",

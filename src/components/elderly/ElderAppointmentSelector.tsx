@@ -10,11 +10,11 @@ import { detectBodyPart } from "@/ai/flows/ai-body-part-detection";
 
 // Symptom to Specialist mapping
 const SYMPTOMS_MAP = [
-    { id: "heart", label: "Heart & Chest", icon: Heart, specialist: "Cardiologist", color: "text-red-500", border: "border-red-200", bg: "bg-red-50" },
-    { id: "bones", label: "Bones & Joints", icon: Bone, specialist: "Orthopedist", color: "text-orange-500", border: "border-orange-200", bg: "bg-orange-50" },
-    { id: "eyes", label: "Eyes & Vision", icon: Eye, specialist: "Ophthalmologist", color: "text-blue-500", border: "border-blue-200", bg: "bg-blue-50" },
-    { id: "fever", label: "Fever & General", icon: Thermometer, specialist: "General Physician", color: "text-green-500", border: "border-green-200", bg: "bg-green-50" },
-    { id: "dental", label: "Teeth & Mouth", icon: Smile, specialist: "Dentist", color: "text-purple-500", border: "border-purple-200", bg: "bg-purple-50" },
+    { id: "heart", label: "Heart & Chest", icon: Heart, specialist: "Cardiology", color: "text-red-500", border: "border-red-200", bg: "bg-red-50" },
+    { id: "bones", label: "Bones & Joints", icon: Bone, specialist: "Orthopedics", color: "text-orange-500", border: "border-orange-200", bg: "bg-orange-50" },
+    { id: "eyes", label: "Eyes & Vision", icon: Eye, specialist: "Ophthalmology", color: "text-blue-500", border: "border-blue-200", bg: "bg-blue-50" },
+    { id: "fever", label: "Fever & General", icon: Thermometer, specialist: "General", color: "text-green-500", border: "border-green-200", bg: "bg-green-50" },
+    { id: "dental", label: "Teeth & Mouth", icon: Smile, specialist: "Dentistry", color: "text-purple-500", border: "border-purple-200", bg: "bg-purple-50" },
     { id: "ent", label: "Ear, Nose, Throat", icon: Ear, specialist: "ENT", color: "text-yellow-500", border: "border-yellow-200", bg: "bg-yellow-50" },
     { id: "stomach", label: "Stomach/Belly", icon: Activity, specialist: "Gastroenterology", color: "text-amber-500", border: "border-amber-200", bg: "bg-amber-50" },
     { id: "neuro", label: "Head/Brain", icon: Brain, specialist: "Neurology", color: "text-indigo-500", border: "border-indigo-200", bg: "bg-indigo-50" },
@@ -34,6 +34,7 @@ export interface AppointmentRequest {
     specialist: string;
     timePreferenceCode: string; // "morning", "afternoon", "evening"
     timePreferenceLabel: string;
+    predictedDoctorName?: string;
 }
 
 interface ElderAppointmentSelectorProps {
@@ -215,6 +216,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
             specialist: symptom.specialist,
             timePreferenceCode: timePref.id,
             timePreferenceLabel: timePref.label,
+            predictedDoctorName: predictedDoctor || undefined
         });
     };
 
