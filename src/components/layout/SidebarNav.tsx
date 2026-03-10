@@ -34,11 +34,23 @@ export function SidebarNav({ role }: { role: "patient" | "doctor" | "pharmacist"
   const { toast } = useToast();
   const [isElderly, setIsElderly] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState("");
+  const [showGuardianMonitoring, setShowGuardianMonitoring] = useState(false);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
     setIsElderly(user.isElderly || false);
     setCurrentUserRole(user.role || "");
+
+    // Check for linked elderly
+    const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+    if (user.email) {
+      const isGuardian = allUsers.some((u: any) =>
+        u.isElderly &&
+        u.guardianEmail &&
+        u.guardianEmail.toLowerCase() === user.email.toLowerCase()
+      );
+      setShowGuardianMonitoring(isGuardian);
+    }
   }, []);
 
   const handleSignOut = () => {
@@ -50,25 +62,11 @@ export function SidebarNav({ role }: { role: "patient" | "doctor" | "pharmacist"
     router.push("/");
   };
 
-  // Determine if patient has linked elderly dependents
-  const hasLinkedElderly = () => {
-    // We check if any elderly user listed their guardianEmail as the current user's email
-    const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
-    const currentUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-    if (!currentUser.email) return false;
-
-    return allUsers.some((u: any) =>
-      u.isElderly &&
-      u.guardianEmail &&
-      u.guardianEmail.toLowerCase() === currentUser.email.toLowerCase()
-    );
-  };
-
   const patientNav = [
     { label: "Overview", href: "/dashboard/patient", icon: Home },
     { label: "Family Profiles", href: "/dashboard/patient/family", icon: Users },
     // Only show Guardian view if they actually have a linked elder
-    ...(hasLinkedElderly() ? [{ label: "Guardian Monitoring", href: "/dashboard/guardian", icon: ShieldCheck }] : []),
+    ...(showGuardianMonitoring ? [{ label: "Guardian Monitoring", href: "/dashboard/guardian", icon: ShieldCheck }] : []),
     { label: "Book Appointment", href: "/dashboard/patient/appointments", icon: Calendar },
     { label: "My Schedule", href: "/dashboard/patient/my-schedule", icon: ClipboardList },
     { label: "Medication", href: "/dashboard/patient/meds", icon: Pill },

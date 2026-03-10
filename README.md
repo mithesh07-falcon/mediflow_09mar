@@ -1,4 +1,3 @@
-
 # MediFlow - Integrated Health Management System
 
 MediFlow is a comprehensive healthcare platform designed to bridge the gap between patients, doctors, and pharmacists through AI-driven insights and real-time clinical synchronization.

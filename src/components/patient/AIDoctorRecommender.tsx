@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +18,12 @@ export function AIDoctorRecommender() {
   const [result, setResult] = useState<AIDoctorRecommendationOutput | null>(null);
   const [error, setError] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [userLang, setUserLang] = useState("English");
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+    if (user.language) setUserLang(user.language);
+  }, []);
 
   const getLangCode = (lang: string) => {
     const map: Record<string, string> = {
@@ -141,7 +147,7 @@ export function AIDoctorRecommender() {
           <div className="absolute bottom-3 right-3 flex items-center gap-2">
             {isListening && (
               <span className="text-[10px] font-black text-primary uppercase animate-pulse tracking-widest bg-primary/10 px-2 py-1 rounded-md">
-                Listening: {JSON.parse(localStorage.getItem("mediflow_current_user") || "{}").language || "English"}
+                Listening: {userLang}
               </span>
             )}
             <Button
