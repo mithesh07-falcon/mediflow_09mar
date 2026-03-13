@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, Bone, Eye, Thermometer, Smile, Sunrise, Sun, Moon, ArrowLeft, CheckCircle2, Camera, Loader2, Hand, Ear, Activity, Brain, Sparkles } from "lucide-react";
+import { Heart, Bone, Eye, Thermometer, Smile, Sunrise, Sun, Moon, ArrowLeft, CheckCircle2, Camera, Loader2, Hand, Ear, Activity, Brain, Sparkles, Mic, Volume2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { detectBodyPart } from "@/ai/flows/ai-body-part-detection";
@@ -21,7 +21,6 @@ const SYMPTOMS_MAP = [
     { id: "skin", label: "Skin/Rashes", icon: Sparkles, specialist: "Dermatology", color: "text-pink-500", border: "border-pink-200", bg: "bg-pink-50" },
 ];
 
-
 const TIME_PREFS = [
     { id: "morning", label: "Morning", time: "8 AM - 12 PM", icon: Sunrise },
     { id: "afternoon", label: "Afternoon", time: "12 PM - 4 PM", icon: Sun },
@@ -32,7 +31,7 @@ export interface AppointmentRequest {
     symptomId: string;
     symptomLabel: string;
     specialist: string;
-    timePreferenceCode: string; // "morning", "afternoon", "evening"
+    timePreferenceCode: string;
     timePreferenceLabel: string;
     predictedDoctorName?: string;
     reason?: string;
@@ -45,106 +44,118 @@ interface ElderAppointmentSelectorProps {
 
 export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }: ElderAppointmentSelectorProps) {
     const { toast } = useToast();
-    const [step, setStep] = useState<1 | 2>(1);
+    const [step, setStep] = useState<1 | 2>(1)
     const [mode, setMode] = useState<"manual" | "camera">("manual");
     const [selectedSymptom, setSelectedSymptom] = useState<string | null>(null);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [staff, setStaff] = useState<any[]>([]);
     const [predictedDoctor, setPredictedDoctor] = useState<string | null>(null);
     const [scanReason, setScanReason] = useState<string | null>(null);
+    
+    // New Multimodal State
     const [isScanning, setIsScanning] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
+    const [isListening, setIsListening] = useState(false);
+    const [voiceTranscript, setVoiceTranscript] = useState("");
+    
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
+    const recognitionRef = useRef<any>(null);
 
     useEffect(() => {
         const fetchStaff = async () => {
             try {
                 const res = await fetch("/api/admin/staff");
-                if (!res.ok) {
-                    throw new Error(`HTTP error! status: ${res.status}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.staff) setStaff(data.staff);
                 }
-                const data = await res.json();
-                if (data.staff) setStaff(data.staff);
             } catch (err) {
-                console.error("Clinical staff lookup failed", err);
-                toast({
-                    variant: "destructive",
-                    title: "Staff Lookup Failed",
-                    description: "Could not fetch clinical staff list. Please try again later.",
-                });
+                console.error("Staff lookup failed", err);
             }
         };
         fetchStaff();
-    }, [toast]);
-
+    }, []);
 
     useEffect(() => {
         let stream: MediaStream | null = null;
-        setCameraError(null);
-
         if (mode === "camera" && step === 1) {
-            if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: true })
-                    .then(s => {
-                        stream = s;
-                        if (videoRef.current) {
-                            videoRef.current.srcObject = s;
-                            videoRef.current.play().catch(e => console.error("Error playing video stream:", e));
-                        }
-                    })
-                    .catch(err => {
-                        console.error("Camera access denied", err);
-                        setCameraError("Camera access denied. Please grant permission in your browser settings to use the Live Scan feature.");
-                        toast({
-                            variant: "destructive",
-                            title: "Camera Access Denied",
-                            description: "Please allow camera access to use the AI Scan feature.",
-                        });
-                    });
-            } else {
-                setCameraError("Live Scan requires a Secure Context (Like localhost or HTTPS). If you are using an IP address, the camera will be disabled by the browser.");
-                toast({
-                    variant: "destructive",
-                    title: "Camera Not Available",
-                    description: "Your browser or environment does not support camera access for Live Scan.",
-                });
-            }
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(s => {
+                    stream = s;
+                    if (videoRef.current) videoRef.current.srcObject = s;
+                    setCameraError(null);
+                })
+                .catch(() => setCameraError("Camera access denied or not available."));
         }
+        return () => stream?.getTracks().forEach(t => t.stop());
+    }, [mode, step]);
 
-        return () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
+    const startVoiceRecording = () => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            toast({ title: "Voice recognition not supported", variant: "destructive" });
+            return;
+        }
+        const recognition = new SpeechRecognition();
+        const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+        const langMap: any = { English: "en-US", Hindi: "hi-IN", Tamil: "ta-IN", Telugu: "te-IN" };
+        recognition.lang = langMap[user.language] || "en-US";
+        
+        recognition.onstart = () => setIsListening(true);
+        recognition.onresult = (event: any) => {
+            const text = event.results[0][0].transcript;
+            setVoiceTranscript(text);
+            toast({ title: "Talk is coming through!", description: `"${text}"` });
         };
-    }, [mode, step, toast]);
+        recognition.onend = () => setIsListening(false);
+        recognition.start();
+    };
+
+    const handleCameraScan = async () => {
+        setIsScanning(true);
+        try {
+            if (!videoRef.current) return;
+            const canvas = document.createElement("canvas");
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+            canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
+            const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
+
+            const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
+            const response = await detectBodyPart({
+                imageBase64: base64Image,
+                voiceTranscript: voiceTranscript,
+                staffList: staffJson
+            });
+
+            setPredictedDoctor(response.predictedDoctorName);
+            setScanReason(response.reason);
+            toast({ title: "Analysis Success", description: response.reason });
+            handleSymptomSelect(response.symptomId);
+        } catch (error) {
+            toast({ variant: "destructive", title: "Scan error", description: "Try manual selection." });
+        } finally {
+            setIsScanning(false);
+            setVoiceTranscript("");
+        }
+    };
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-
         setIsScanning(true);
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
                 const base64Image = (e.target?.result as string).split(",")[1];
-                const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
-                const response = await detectBodyPart({
-                    imageBase64: base64Image,
-                    staffList: staffJson
-                });
-
+                const response = await detectBodyPart({ imageBase64: base64Image, voiceTranscript: voiceTranscript });
                 setPredictedDoctor(response.predictedDoctorName);
                 setScanReason(response.reason);
-                handleSymptomSelect(response.symptomId); // This will set step to 2
-                toast({
-                    title: "AI Analysis Complete",
-                    description: `I recommend ${response.predictedDoctorName} for your ${response.specialistType}. ${response.reason}`
-                });
-            } catch (error) {
-                console.error("AI Analysis failed", error);
-                // Don't auto-pick 'fever'/General — let user choose manually
-                toast({ variant: "destructive", title: "Analysis Failed", description: "Could not identify body part. Please select manually from the list." });
+                handleSymptomSelect(response.symptomId);
+                toast({ title: "Found a Specialist", description: response.reason });
+            } catch {
+                toast({ variant: "destructive", title: "Upload Failed" });
             } finally {
                 setIsScanning(false);
             }
@@ -152,67 +163,15 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         reader.readAsDataURL(file);
     };
 
-    const handleCameraScan = async () => {
-        setIsScanning(true);
-        try {
-            if (!videoRef.current || !videoRef.current.srcObject) {
-                throw new Error("Camera stream is not active. Please ensure permissions are granted.");
-            }
-
-            const canvas = document.createElement("canvas");
-            canvas.width = videoRef.current.videoWidth || 640;
-            canvas.height = videoRef.current.videoHeight || 480;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) throw new Error("Canvas context failed");
-
-            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-            const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
-
-            const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
-            const response = await detectBodyPart({
-                imageBase64: base64Image,
-                staffList: staffJson
-            });
-
-            setPredictedDoctor(response.predictedDoctorName);
-
-            toast({
-                title: "Diagnosis Complete!",
-                description: `We found ${response.predictedDoctorName} (${response.specialistType}) for you. ${response.reason}`,
-            });
-
-            handleSymptomSelect(response.symptomId);
-        } catch (error) {
-            console.error("Scanning failed", error);
-            // Don't auto-pick 'fever'/General — let user choose manually
-            toast({
-                variant: "destructive",
-                title: "Scan Failed",
-                description: "We couldn't clearly see the body part. Please select manually from the list."
-            });
-        } finally {
-            setIsScanning(false);
-        }
-    };
-
-    const handleSymptomSelect = (symptomId: string) => {
-        setSelectedSymptom(symptomId);
-        // Proceed to Step 2 after a tiny delay for visual feedback
-        setTimeout(() => {
-            setStep(2);
-        }, 300);
-    };
-
-    const handleTimeSelect = (timeId: string) => {
-        setSelectedTime(timeId);
+    const handleSymptomSelect = (id: string) => {
+        setSelectedSymptom(id);
+        setTimeout(() => setStep(2), 300);
     };
 
     const handleConfirm = () => {
         if (!selectedSymptom || !selectedTime) return;
-
         const symptom = SYMPTOMS_MAP.find(s => s.id === selectedSymptom)!;
         const timePref = TIME_PREFS.find(t => t.id === selectedTime)!;
-
         onSearchDoctors({
             symptomId: symptom.id,
             symptomLabel: symptom.label,
@@ -229,188 +188,108 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     return (
         <Card className="max-w-xl mx-auto border-4 border-slate-200 shadow-xl rounded-[2rem] overflow-hidden">
             <CardHeader className="text-center bg-slate-50 pb-8 pt-8 border-b-2 border-slate-100">
-                <CardTitle className="text-3xl font-black">
-                    {step === 1 ? (mode === "manual" ? "Where do you need help?" : "Point Camera at Body Part") : "When should we schedule?"}
+                <CardTitle className="text-3xl font-black uppercase tracking-tight">
+                    {step === 1 ? (mode === "manual" ? "Where is the pain?" : "Show us & Tell us") : "Appointment Time"}
                 </CardTitle>
-                <CardDescription className="text-lg font-medium text-slate-600 mt-2">
-                    {step === 1
-                        ? (mode === "manual" ? "Tap on the body part or symptom you are having trouble with." : "Position your camera and wait for auto-detection.")
-                        : `Finding a ${selectedSymptomData?.specialist} for your ${selectedSymptomData?.label}`}
+                <CardDescription className="text-lg font-medium text-slate-600">
+                    {step === 1 
+                        ? (mode === "manual" ? "Choose from the body areas below." : "Hold camera near the area and speak into the mic.")
+                        : `Finding a ${selectedSymptomData?.specialist} for you.`}
                 </CardDescription>
             </CardHeader>
 
             <CardContent className="p-8">
                 {step === 1 && (
-                    <div className="space-y-6 mb-10 text-center animate-in fade-in zoom-in-95 duration-500">
-                        <p className="text-3xl font-black uppercase text-slate-800">Choose how to find a doctor:</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <button
-                                type="button"
-                                className={cn(
-                                    "flex flex-col items-center justify-center p-8 rounded-[3rem] border-8 transition-all duration-300 gap-4 group",
-                                    mode === "camera"
-                                        ? "bg-black text-white border-black shadow-2xl scale-[1.05]"
-                                        : "bg-white text-slate-500 border-slate-200 hover:border-black/50"
-                                )}
-                                onClick={() => setMode("camera")}
-                            >
-                                <div className={cn("p-6 rounded-full group-hover:bg-primary/20", mode === "camera" ? "bg-white/10" : "bg-slate-50")}>
-                                    <Camera className={cn("h-20 w-20", mode === "camera" ? "text-green-400" : "text-slate-400")} />
-                                </div>
-                                <span className={cn("text-4xl font-black uppercase", mode === "camera" ? "text-white" : "text-black")}>AI SCAN</span>
-                                <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Auto-Detect Body Part</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                className={cn(
-                                    "flex flex-col items-center justify-center p-8 rounded-[3rem] border-8 transition-all duration-300 gap-4 group",
-                                    mode === "manual"
-                                        ? "bg-black text-white border-black shadow-2xl scale-[1.05]"
-                                        : "bg-white text-slate-500 border-slate-200 hover:border-black/50"
-                                )}
-                                onClick={() => setMode("manual")}
-                            >
-                                <div className={cn("p-6 rounded-full group-hover:bg-primary/20", mode === "manual" ? "bg-white/10" : "bg-slate-50")}>
-                                    <Hand className={cn("h-20 w-20", mode === "manual" ? "text-primary" : "text-slate-400")} />
-                                </div>
-                                <span className={cn("text-4xl font-black uppercase", mode === "manual" ? "text-white" : "text-black")}>MANUAL</span>
-                                <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Select From List</span>
-                            </button>
-                        </div>
+                    <div className="flex gap-4 mb-8">
+                        <Button 
+                            className={cn("flex-1 h-20 text-2xl font-black rounded-3xl border-4", mode === 'camera' ? 'bg-black text-white border-black' : 'bg-white text-slate-400 border-slate-100')}
+                            onClick={() => setMode('camera')}
+                        >
+                            <Camera className="mr-2" /> AI SCAN
+                        </Button>
+                        <Button 
+                            className={cn("flex-1 h-20 text-2xl font-black rounded-3xl border-4", mode === 'manual' ? 'bg-black text-white border-black' : 'bg-white text-slate-400 border-slate-100')}
+                            onClick={() => setMode('manual')}
+                        >
+                            <Hand className="mr-2" /> MANUAL
+                        </Button>
                     </div>
                 )}
-
 
                 {step === 1 ? (
                     mode === "manual" ? (
                         <div className="grid grid-cols-2 gap-4">
-                            {SYMPTOMS_MAP.map((symptom) => {
-                                const Icon = symptom.icon;
-                                const isSelected = selectedSymptom === symptom.id;
+                            {SYMPTOMS_MAP.map(s => {
+                                const Icon = s.icon;
+                                const isSelected = selectedSymptom === s.id;
                                 return (
-                                    <button
-                                        key={symptom.id}
-                                        onClick={() => handleSymptomSelect(symptom.id)}
-                                        className={`
-                    flex flex-col items-center justify-center gap-4 p-6 rounded-3xl border-4 transition-all
-                    hover:-translate-y-1 hover:shadow-lg active:scale-95
-                    ${isSelected ? `border-primary ring-4 ring-primary/20 ${symptom.bg}` : `border-slate-200 hover:${symptom.border} bg-white`}
-                  `}
+                                    <button 
+                                        key={s.id} 
+                                        onClick={() => handleSymptomSelect(s.id)}
+                                        className={cn("flex flex-col items-center p-6 rounded-[2rem] border-4 transition-all", isSelected ? `border-primary ${s.bg}` : "border-slate-100 bg-white")}
                                     >
-                                        <div className={`p-4 rounded-full ${isSelected ? 'bg-white shadow-sm' : symptom.bg}`}>
-                                            <Icon className={`w-12 h-12 ${symptom.color}`} />
-                                        </div>
-                                        <span className="text-xl font-bold text-center leading-tight">
-                                            {symptom.label}
-                                        </span>
+                                        <Icon className={cn("w-12 h-12 mb-2", s.color)} />
+                                        <span className="text-lg font-bold">{s.label}</span>
                                     </button>
                                 );
                             })}
                         </div>
-                    ) : ( // Camera Mode
-                        <div className="space-y-6 animate-in zoom-in-95">
-                            <div className="relative aspect-video bg-slate-200 rounded-[2rem] overflow-hidden border-8 border-slate-900 shadow-inner flex items-center justify-center">
-                                {cameraError ? (
-                                    <div className="p-8 text-center space-y-4">
-                                        <Camera className="h-16 w-16 mx-auto text-slate-400" />
-                                        <p className="text-xl font-bold text-slate-600">{cameraError}</p>
-                                        <p className="text-sm text-slate-400">You can still upload a photo for AI analysis below.</p>
-                                    </div>
-                                ) : (
-                                    <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted />
-                                )}
-
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="relative aspect-video bg-black rounded-[2rem] overflow-hidden border-8 border-slate-900 shadow-2xl">
+                                {cameraError ? <div className="p-8 text-white text-center font-bold">{cameraError}</div> : <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted />}
                                 {isScanning && (
-                                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white p-10 text-center backdrop-blur-sm z-10">
-                                        <Loader2 className="h-20 w-20 animate-spin mb-4 text-green-400" />
-                                        <span className="text-3xl font-black uppercase tracking-widest text-green-400">Analyzing...</span>
+                                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white backdrop-blur-md">
+                                        <Loader2 className="h-16 w-16 animate-spin mb-4 text-green-400" />
+                                        <h3 className="text-3xl font-black text-green-400">ANALYZING...</h3>
                                     </div>
-                                )}
-                                {!isScanning && !cameraError && (
-                                    <div className="absolute inset-0 border-[6px] border-dashed border-white/50 m-8 rounded-[2rem] pointer-events-none" />
                                 )}
                             </div>
-
-                            <div className="grid grid-cols-1 gap-4">
-                                {!cameraError ? (
-                                    <Button
-                                        className="w-full h-24 text-3xl font-black bg-black text-white rounded-[2rem] shadow-2xl active:scale-95 transition-all border-b-8 border-slate-700"
+                            <div className="flex flex-col gap-4">
+                                <div className="flex gap-4">
+                                    <Button 
+                                        className={cn("flex-1 h-32 text-3xl font-black rounded-[2.5rem] border-[10px]", isListening ? "bg-red-600 border-red-800 text-white animate-pulse" : "bg-white text-black border-black")}
+                                        onClick={startVoiceRecording}
+                                    >
+                                        <Mic className="mr-2 h-10 w-10" /> {voiceTranscript ? "GOT IT" : "SPEAK"}
+                                    </Button>
+                                    <Button 
+                                        className="flex-1 h-32 text-3xl font-black bg-black text-white rounded-[2.5rem] border-[10px] border-black"
                                         onClick={handleCameraScan}
                                         disabled={isScanning}
                                     >
-                                        {isScanning ? <Loader2 className="h-10 w-10 animate-spin" /> : "SCAN NOW"}
+                                        <Camera className="mr-2 h-10 w-10" /> SCAN
                                     </Button>
-                                ) : (
-                                    <div className="text-center">
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            ref={fileInputRef}
-                                            onChange={handleFileUpload}
-                                        />
-                                        <Button
-                                            variant="outline"
-                                            className="w-full h-24 text-2xl font-black border-8 border-black rounded-[2rem] hover:bg-slate-50 transition-all shadow-xl"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            disabled={isScanning}
-                                        >
-                                            <Camera className="mr-3 h-8 w-8 text-primary" />
-                                            UPLOAD FOR AI
-                                        </Button>
+                                </div>
+                                {voiceTranscript && (
+                                    <div className="p-6 bg-slate-50 border-4 border-dashed border-slate-200 rounded-[2rem] text-xl font-bold italic text-slate-500 text-center">
+                                        "{voiceTranscript}"
                                     </div>
                                 )}
+                                <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+                                <Button variant="link" className="text-slate-400 font-bold" onClick={() => fileInputRef.current?.click()}>
+                                    OR UPLOAD A PHOTO
+                                </Button>
                             </div>
                         </div>
                     )
-
-
                 ) : (
-                    <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
-                        <button
-                            onClick={() => setStep(1)}
-                            className="flex items-center gap-2 text-primary font-bold px-4 py-2 hover:bg-primary/5 rounded-full transition-colors"
-                        >
-                            <ArrowLeft className="w-5 h-5" />
-                            Back to Symptoms
-                        </button>
-
+                    <div className="space-y-6">
+                        <Button variant="ghost" className="font-bold text-primary" onClick={() => setStep(1)}><ArrowLeft className="mr-2" /> Back</Button>
                         <div className="space-y-4">
-                            {TIME_PREFS.map((timePref) => {
-                                const Icon = timePref.icon;
-                                const isSelected = selectedTime === timePref.id;
-                                return (
-                                    <button
-                                        key={timePref.id}
-                                        onClick={() => handleTimeSelect(timePref.id)}
-                                        className={`
-                      w-full flex items-center p-6 rounded-3xl border-4 transition-all
-                      hover:shadow-md active:scale-[0.98]
-                      ${isSelected ? 'border-primary bg-primary/5 ring-4 ring-primary/10' : 'border-slate-200 hover:border-primary/40 bg-white'}
-                    `}
-                                    >
-                                        <div className={`p-4 rounded-full mr-6 ${isSelected ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'}`}>
-                                            <Icon className="w-8 h-8" />
-                                        </div>
-                                        <div className="flex-1 text-left">
-                                            <h3 className="text-2xl font-black">{timePref.label}</h3>
-                                            <p className="text-lg font-medium text-slate-500">{timePref.time}</p>
-                                        </div>
-                                        {isSelected && <CheckCircle2 className="w-8 h-8 text-primary" />}
-                                    </button>
-                                );
-                            })}
+                            {TIME_PREFS.map(tp => (
+                                <button 
+                                    key={tp.id} 
+                                    onClick={() => setSelectedTime(tp.id)}
+                                    className={cn("w-full flex items-center p-6 rounded-[2rem] border-4", selectedTime === tp.id ? "border-primary bg-primary/5" : "border-slate-100 bg-white")}
+                                >
+                                    <tp.icon className="w-10 h-10 mr-6 text-slate-400" />
+                                    <div className="text-left"><h4 className="text-2xl font-black">{tp.label}</h4><p className="font-bold text-slate-400">{tp.time}</p></div>
+                                    {selectedTime === tp.id && <CheckCircle2 className="ml-auto w-8 h-8 text-primary" />}
+                                </button>
+                            ))}
                         </div>
-
-                        <Button
-                            className="w-full h-20 text-2xl font-black rounded-3xl mt-8 shadow-xl"
-                            size="lg"
-                            disabled={!selectedTime || isLoading}
-                            onClick={handleConfirm}
-                        >
-                            {isLoading ? "Searching Doctors..." : "Find Doctors Now"}
-                        </Button>
+                        <Button className="w-full h-24 text-4xl font-black rounded-[2.5rem] mt-8 shadow-2xl uppercase" onClick={handleConfirm} disabled={!selectedTime}>Find Doctors</Button>
                     </div>
                 )}
             </CardContent>

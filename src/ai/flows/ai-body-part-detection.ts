@@ -5,6 +5,7 @@ import { z } from 'genkit';
 
 const AIBodyPartDetectionInputSchema = z.object({
     imageBase64: z.string().describe('The base64 encoded image from the camera.'),
+    voiceTranscript: z.string().optional().describe('The user\'s verbal description of symptoms (could be in Hindi, Telugu, Tamil).'),
     staffList: z.string().optional().describe('JSON string of available medical staff and their specialties.'),
 });
 
@@ -134,20 +135,16 @@ and then map it to exactly one of the symptom IDs below.
   "fever"   → General unwellness, No specific body part  →  General Physician
 ══════════════════════════════════════════════════════════════════════════════
 
-STRICT RULES:
-1. ALWAYS pick the MOST SPECIFIC symptomId. NEVER default to "fever" unless NO specific body part is visible.
-2. If a hand/arm/leg/back/knee/joint is visible → MUST be "bones"
-3. If eye area is visible → MUST be "eyes"
-4. If mouth/teeth area → MUST be "dental"
-5. If ear/nose/throat → MUST be "ent"
-6. If chest/heart area → MUST be "heart"
-7. If stomach/belly area → MUST be "stomach"
-8. If head/temple → MUST be "neuro"
-9. If skin condition visible → MUST be "skin"
-10. "fever" is the LAST RESORT only.
+STRICT MULTIMODAL RULES:
+1. USE THE VOICE TRANSCRIPT: If the patient speaks in Hindi, Telugu, Tamil, or English, understand their symptoms.
+2. USE THE IMAGE: Identify the body part shown.
+3. FUSION: Combine these inputs.
+4. REGIONAL LANGUAGE: If the voice transcript is in a regional language, respond with a comfort message (reason) in that same language if possible.
 
-Available doctors (match the doctor name from this list based on their specialty):
+Available doctors:
 ${input.staffList || "Dr. Brown (Cardiology), Dr. White (Orthopedics), Dr. Anderson (Ophthalmology), Dr. Wilson (Dentistry), Dr. Lee (ENT), Dr. Jones (Gastroenterology), Dr. Smith (Neurology), Dr. Miller (Dermatology), Dr. Taylor (General)"}
+
+PATIENT VOICE NOTE: "${input.voiceTranscript || "No voice note provided."}"
 
 Respond with:
 - symptomId: one of the enum values
