@@ -409,8 +409,8 @@ export default function ElderlyDashboard() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button className="h-28 px-10 text-4xl font-black bg-white text-black border-8 border-black rounded-3xl shadow-xl hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-4">
-                <Languages className="h-10 w-10 text-primary" />
-                {user.language.substring(0, 3).toUpperCase()}
+                <Languages className="h-12 w-12 text-blue-600" strokeWidth={3} />
+                <span className="text-4xl font-black">{user.language.substring(0, 3).toUpperCase()}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-white border-8 border-black rounded-[2rem] p-4 space-y-2 w-72" align="end">
@@ -447,10 +447,10 @@ export default function ElderlyDashboard() {
           </div>
         </Card>
         <Button
-          className="h-44 px-20 text-6xl font-black bg-black text-white rounded-[4rem] border-8 border-black shadow-2xl hover:bg-zinc-800 transition-all active:scale-90"
+          className="h-56 w-56 sm:h-auto sm:aspect-square text-6xl font-black bg-black text-white rounded-[5rem] border-[15px] border-black shadow-2xl hover:bg-zinc-800 transition-all active:scale-90 flex items-center justify-center"
           onClick={handleRefill}
         >
-          {t.refillSnippet}
+          <Pill className="h-24 w-24" strokeWidth={3} />
         </Button>
       </div>
 
@@ -458,10 +458,9 @@ export default function ElderlyDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="h-[200px] flex flex-row items-center justify-center gap-6 text-5xl font-black bg-white text-black rounded-[5rem] border-[15px] border-black shadow-2xl hover:bg-slate-50 transition-all hover:scale-[1.02]">
-              <Camera className="h-16 w-16" />
-              {t.checkPill}
-            </Button>
+            <button className="w-full aspect-square flex flex-col items-center justify-center bg-white text-black rounded-[6rem] border-[30px] border-blue-600 shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] hover:bg-blue-50 transition-all hover:scale-[1.05] group focus:outline-none">
+              <Pill className="w-64 h-64 text-blue-600 group-hover:scale-110 transition-transform" strokeWidth={3} />
+            </button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-4xl bg-white border-[15px] border-black rounded-[5rem] p-0 overflow-hidden">
             <DialogHeader className="bg-black p-12 text-white m-0">
@@ -496,53 +495,52 @@ export default function ElderlyDashboard() {
           </DialogContent>
         </Dialog>
 
-        <Button
-          className="h-[200px] flex flex-row items-center justify-center gap-6 text-5xl font-black bg-white text-black border-[15px] border-black rounded-[5rem] shadow-2xl hover:bg-slate-50 transition-all hover:scale-[1.02]"
+        <button
+          className="w-full aspect-square flex flex-col items-center justify-center bg-white text-black border-[30px] border-green-600 rounded-[6rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] hover:bg-green-50 transition-all hover:scale-[1.05] group focus:outline-none"
           onClick={() => router.push('/dashboard/elderly/medicines')}
         >
-          <Pill className="h-16 w-16" />
-          {t.myPills}
-        </Button>
+          <div className="relative w-64 h-64 flex items-center justify-center font-black">
+             <Pill className="h-full w-full text-green-600 group-hover:scale-110 transition-transform" strokeWidth={3} />
+             <div className="absolute -bottom-4 -right-4 bg-black text-white rounded-full p-4 border-[10px] border-white">
+                <ClipboardList className="h-20 w-20" strokeWidth={4} />
+             </div>
+          </div>
+        </button>
 
-        <Button
-          className="h-[200px] flex flex-row items-center justify-center gap-6 text-5xl font-black bg-[#9b59b6] hover:bg-[#8e44ad] text-white border-[15px] border-black rounded-[5rem] shadow-2xl transition-all hover:scale-[1.02] active:scale-95"
+        <button
+          className="w-full aspect-square flex flex-col items-center justify-center bg-[#9b59b6] text-white border-[30px] border-black rounded-[6rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] transition-all hover:scale-[1.05] group focus:outline-none"
           onClick={() => router.push('/dashboard/elderly/book-appointment')}
         >
-          <Stethoscope className="h-16 w-16" />
-          BOOK DOCTOR
-        </Button>
+          <Stethoscope className="w-64 h-64 group-hover:rotate-12 transition-transform" strokeWidth={3} />
+        </button>
 
-        <Button
-          className="h-[200px] flex flex-row items-center justify-center gap-6 text-5xl font-black bg-white text-black border-[15px] border-black rounded-[5rem] shadow-2xl hover:bg-slate-50 transition-all hover:scale-[1.02]"
+        <button
+          className="w-full aspect-square flex flex-col items-center justify-center bg-white text-black border-[30px] border-orange-500 rounded-[6rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] hover:bg-orange-50 transition-all hover:scale-[1.05] group focus:outline-none"
           onClick={() => router.push('/dashboard/elderly/checklist')}
         >
-          <ClipboardList className="h-16 w-16" />
-          {t.livingList}
-        </Button>
+          <ClipboardList className="w-64 h-64 text-orange-500 group-hover:scale-110 transition-transform" strokeWidth={3} />
+        </button>
 
-        <Button
-          className="h-[200px] flex flex-row items-center justify-center gap-6 text-5xl font-black bg-white text-black border-[15px] border-black rounded-[5rem] shadow-2xl hover:bg-slate-50 transition-all hover:scale-[1.02]"
+        <button
+          className="w-full aspect-square flex flex-col items-center justify-center bg-white text-black border-[30px] border-red-500 rounded-[6rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] hover:bg-red-50 transition-all hover:scale-[1.05] group focus:outline-none"
           onClick={() => router.push('/dashboard/elderly/health')}
         >
-          <Activity className="h-16 w-16" />
-          {t.healthData}
-        </Button>
+          <Activity className="w-64 h-64 text-red-600 group-hover:scale-110 transition-transform" strokeWidth={3} />
+        </button>
 
-        <Button
-          className="h-[200px] flex flex-row items-center justify-center gap-6 text-5xl font-black bg-white text-black border-[15px] border-black rounded-[5rem] shadow-2xl hover:bg-slate-50 transition-all hover:scale-[1.02]"
+        <button
+          className="w-full aspect-square flex flex-col items-center justify-center bg-white text-black border-[30px] border-yellow-500 rounded-[6rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] hover:bg-yellow-50 transition-all hover:scale-[1.05] group focus:outline-none"
           onClick={() => router.push('/dashboard/elderly/meals')}
         >
-          <Utensils className="h-16 w-16 text-orange-600" />
-          {t.mealTracker}
-        </Button>
+          <Utensils className="w-64 h-64 text-yellow-600 group-hover:scale-110 transition-transform" strokeWidth={3} />
+        </button>
 
-        <Button
-          className="h-[200px] flex flex-row items-center justify-center gap-6 text-5xl font-black bg-black text-white rounded-[5rem] border-[15px] border-black shadow-2xl animate-pulse hover:bg-zinc-800 transition-all active:scale-95"
+        <button
+          className="w-full aspect-square flex flex-col items-center justify-center bg-red-600 text-white border-[30px] border-black rounded-[6rem] shadow-[0_35px_60px_-20px_rgba(255,0,0,0.5)] animate-pulse transition-all hover:scale-[1.1] group focus:outline-none"
           onClick={triggerSOS}
         >
-          <AlertCircle className="h-16 w-16" />
-          {t.sos}
-        </Button>
+          <AlertCircle className="w-80 h-80 group-hover:scale-125 transition-transform" strokeWidth={3} />
+        </button>
       </div>
 
       {/* Footer: Safety Indicator */}

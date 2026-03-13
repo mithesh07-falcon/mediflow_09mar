@@ -94,75 +94,124 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     const activateScanner = () => {
         if (mode === "camera") return;
         setMode("camera");
-        
+    };
+
+    // Combined scan: starts voice recording + captures camera image simultaneously
+    // Voice recording runs for a few seconds, then we capture the image and send both to AI
+    const handleCombinedScan = async () => {
+        setIsScanning(true);
+        setVoiceTranscript("");
+
+        // Prompt user to speak in their language
         const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-        const langMap: Record<string, string> = { English: "en-US", Hindi: "hi-IN", Tamil: "ta-IN", Telugu: "te-IN" };
-        const promptMap: Record<string, string> = { English: "Please talk", Hindi: "कृपया बोलें", Tamil: "தயவுசெய்து பேசுங்கள்", Telugu: "దయచేసి మాట్లాడండి" };
-        
+        const langMap: Record<string, string> = { English: "en-US", Hindi: "hi-IN", Tamil: "ta-IN", Telugu: "te-IN", Kannada: "kn-IN", Bengali: "bn-IN", Marathi: "mr-IN" };
+        const promptMap: Record<string, string> = {
+            English: "Tell me where it hurts",
+            Hindi: "बताइए कहाँ दर्द है",
+            Tamil: "எங்கே வலிக்கிறது சொல்லுங்கள்",
+            Telugu: "ఎక్కడ నొప్పిగా ఉంది చెప్పండి",
+            Kannada: "ಎಲ್ಲಿ ನೋವಿದೆ ಹೇಳಿ",
+            Bengali: "কোথায় ব্যথা বলুন",
+            Marathi: "कुठे दुखतंय सांगा"
+        };
         const langCode = langMap[user.language] || "en-US";
         const promptText = promptMap[user.language] || promptMap.English;
 
+        // Step 1: Speak the prompt, then start listening + camera capture together
+        const startCombinedCapture = () => {
+            let capturedTranscript = "";
+
+            // Start voice recording
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            let recognitionActive = false;
+            
+            if (SpeechRecognition) {
+                try {
+                    const recognition = new SpeechRecognition();
+                    recognition.lang = langCode;
+                    recognition.interimResults = false;
+                    recognition.maxAlternatives = 1;
+                    recognitionRef.current = recognition;
+
+                    recognition.onstart = () => {
+                        setIsListening(true);
+                        recognitionActive = true;
+                    };
+                    recognition.onresult = (event: any) => {
+                        capturedTranscript = event.results[0][0].transcript;
+                        setVoiceTranscript(capturedTranscript);
+                    };
+                    recognition.onerror = () => {
+                        setIsListening(false);
+                        recognitionActive = false;
+                    };
+                    recognition.onend = () => {
+                        setIsListening(false);
+                        recognitionActive = false;
+                    };
+                    recognition.start();
+                } catch (e) {
+                    console.warn("Voice recognition failed to start", e);
+                }
+            }
+
+            // Step 2: After 4 seconds of listening, capture the camera frame and send both to AI
+            setTimeout(async () => {
+                // Stop the voice recording if still active
+                if (recognitionRef.current && recognitionActive) {
+                    try { recognitionRef.current.stop(); } catch {}
+                }
+                setIsListening(false);
+
+                // Capture camera frame
+                try {
+                    if (!videoRef.current) throw new Error("Camera not ready");
+
+                    const vw = videoRef.current.videoWidth || 640;
+                    const vh = videoRef.current.videoHeight || 480;
+                    const canvas = document.createElement("canvas");
+                    canvas.width = vw;
+                    canvas.height = vh;
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) throw new Error("Canvas failed");
+                    ctx.drawImage(videoRef.current, 0, 0, vw, vh);
+                    const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
+
+                    if (!base64Image || base64Image.length < 100) {
+                        throw new Error("Camera image capture failed — image too small");
+                    }
+
+                    const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
+                    const response = await detectBodyPart({
+                        imageBase64: base64Image,
+                        voiceTranscript: capturedTranscript,
+                        staffList: staffJson
+                    });
+
+                    setPredictedDoctor(response.predictedDoctorName);
+                    setScanReason(response.reason);
+                    toast({ title: "Specialist Found!", description: response.reason });
+                    handleSymptomSelect(response.symptomId);
+                } catch (error) {
+                    console.error("Scan failed:", error);
+                    toast({ variant: "destructive", title: "Scan Failed", description: "Camera could not capture properly. Try manual selection." });
+                } finally {
+                    setIsScanning(false);
+                    setVoiceTranscript("");
+                }
+            }, 4000); // 4 seconds of listening time
+        };
+
+        // Speak the prompt first, then start combined capture
         if (window.speechSynthesis) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(promptText);
             utterance.lang = langCode;
-            utterance.rate = 0.9;
-            utterance.onend = () => {
-                startVoiceRecording();
-            };
+            utterance.rate = 0.85;
+            utterance.onend = () => startCombinedCapture();
             window.speechSynthesis.speak(utterance);
         } else {
-            startVoiceRecording();
-        }
-    };
-
-    const startVoiceRecording = () => {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            toast({ title: "Voice recognition not supported", variant: "destructive" });
-            return;
-        }
-        const recognition = new SpeechRecognition();
-        const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-        const langMap: any = { English: "en-US", Hindi: "hi-IN", Tamil: "ta-IN", Telugu: "te-IN" };
-        recognition.lang = langMap[user.language] || "en-US";
-        
-        recognition.onstart = () => setIsListening(true);
-        recognition.onresult = (event: any) => {
-            const text = event.results[0][0].transcript;
-            setVoiceTranscript(text);
-            toast({ title: "Talk is coming through!", description: `"${text}"` });
-        };
-        recognition.onend = () => setIsListening(false);
-        recognition.start();
-    };
-
-    const handleCameraScan = async () => {
-        setIsScanning(true);
-        try {
-            if (!videoRef.current) return;
-            const canvas = document.createElement("canvas");
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
-            canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
-            const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
-
-            const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
-            const response = await detectBodyPart({
-                imageBase64: base64Image,
-                voiceTranscript: voiceTranscript,
-                staffList: staffJson
-            });
-
-            setPredictedDoctor(response.predictedDoctorName);
-            setScanReason(response.reason);
-            toast({ title: "Analysis Success", description: response.reason });
-            handleSymptomSelect(response.symptomId);
-        } catch (error) {
-            toast({ variant: "destructive", title: "Scan error", description: "Try manual selection." });
-        } finally {
-            setIsScanning(false);
-            setVoiceTranscript("");
+            startCombinedCapture();
         }
     };
 
@@ -265,38 +314,52 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                 {cameraError ? <div className="p-8 text-white text-center font-bold">{cameraError}</div> : <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted />}
                                 {isScanning && (
                                     <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white backdrop-blur-md">
-                                        <Loader2 className="h-16 w-16 animate-spin mb-4 text-green-400" />
-                                        <h3 className="text-3xl font-black text-green-400">ANALYZING...</h3>
-                                    </div>
-                                )}
-                                {isListening && !isScanning && (
-                                    <div className="absolute top-4 right-4 bg-red-600/90 text-white px-4 py-2 rounded-full flex flex-col items-center animate-pulse border-2 border-white shadow-lg">
-                                        <Mic className="h-6 w-6 mb-1" />
-                                        <span className="text-xs font-bold tracking-widest uppercase">LISTENING</span>
+                                        {isListening ? (
+                                            <>
+                                                <div className="h-32 w-32 border-[8px] border-red-500 rounded-full flex items-center justify-center animate-pulse mb-4">
+                                                    <Mic className="h-16 w-16 text-red-400" />
+                                                </div>
+                                                <h3 className="text-3xl font-black text-red-400">LISTENING...</h3>
+                                                <p className="text-lg text-white/60 font-bold mt-2">Show the area & speak your symptoms</p>
+                                                {voiceTranscript && (
+                                                    <div className="mt-4 px-6 py-3 bg-white/10 rounded-2xl border border-white/20">
+                                                        <p className="text-xl font-bold text-green-400">"{voiceTranscript}"</p>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Loader2 className="h-16 w-16 animate-spin mb-4 text-green-400" />
+                                                <h3 className="text-3xl font-black text-green-400">ANALYZING...</h3>
+                                                {voiceTranscript && (
+                                                    <p className="text-lg text-white/60 font-bold mt-2">You said: "{voiceTranscript}"</p>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
                                 )}
                             </div>
                             <div className="flex flex-col gap-4">
-                                <div className="flex gap-4">
-                                    <Button 
-                                        className={cn("flex-1 h-32 text-3xl font-black rounded-[2.5rem] border-[10px]", isListening ? "bg-red-600 border-red-800 text-white animate-pulse" : "bg-white text-black border-black")}
-                                        onClick={startVoiceRecording}
-                                    >
-                                        <Mic className="mr-2 h-10 w-10" /> {voiceTranscript ? "RE-RECORD" : "SPEAK"}
-                                    </Button>
-                                    <Button 
-                                        className="flex-1 h-32 text-3xl font-black bg-black text-white rounded-[2.5rem] border-[10px] border-black"
-                                        onClick={handleCameraScan}
-                                        disabled={isScanning}
-                                    >
-                                        <Camera className="mr-2 h-10 w-10" /> SCAN
-                                    </Button>
-                                </div>
-                                {voiceTranscript && (
-                                    <div className="p-6 bg-slate-50 border-4 border-dashed border-slate-200 rounded-[2rem] text-xl font-bold italic text-slate-500 text-center">
-                                        "{voiceTranscript}"
-                                    </div>
-                                )}
+                                {/* Single SCAN button — captures camera + voice simultaneously */}
+                                <Button 
+                                    className={cn(
+                                        "w-full h-32 text-4xl font-black rounded-[2.5rem] border-[10px] transition-all",
+                                        isScanning
+                                            ? "bg-red-600 border-red-800 text-white animate-pulse"
+                                            : "bg-black text-white border-black hover:bg-zinc-800 active:scale-95"
+                                    )}
+                                    onClick={handleCombinedScan}
+                                    disabled={isScanning}
+                                >
+                                    {isScanning ? (
+                                        <><Mic className="mr-3 h-10 w-10" /> {isListening ? "LISTENING & SCANNING..." : "ANALYZING..."}</>
+                                    ) : (
+                                        <><Camera className="mr-3 h-10 w-10" /> <Mic className="mr-1 h-8 w-8 opacity-60" /> SCAN</>
+                                    )}
+                                </Button>
+                                <p className="text-center text-lg font-bold text-slate-400">
+                                    Point camera at pain area — mic will listen automatically
+                                </p>
                                 <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
                                 <Button variant="link" className="text-slate-400 font-bold" onClick={() => fileInputRef.current?.click()}>
                                     OR UPLOAD A PHOTO

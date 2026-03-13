@@ -20,7 +20,23 @@ export type AIPillDetectionOutput = z.infer<typeof AIPillDetectionOutputSchema>;
 export async function detectPill(input: AIPillDetectionInput): Promise<AIPillDetectionOutput> {
     const result = await ai.generate({
         prompt: [
-            { text: `Examine this image of a pill/medication. The user is an elderly patient. Here are their active prescriptions:\n\n${input.prescriptions}\n\n1. Identify the pill.\n2. Cross-reference it with their prescriptions to determine when they should take it and why.\n3. Write a reassuring instruction to the patient.\n4. IMPORTANT: Write the instruction COMPLETELY in the language: ${input.language}.` },
+            { text: `You are a medical assistant for an elderly person. Examine this image of a pill/medication.
+            
+            USER DATA (Active Prescriptions):
+            ${input.prescriptions}
+
+            INSTRUCTIONS:
+            1. **IDENTIFICATION**: Look for text on the backside (label/strip) of the tablet. If visible, identify the medicine name and what it is used for.
+            2. **ACCURACY CHECK**: Cross-reference the medicine name with the user's active prescriptions above. 
+            3. **PRESCRIPTION VERIFICATION**:
+               - Does the name match exactly?
+               - Is it the right time of day to take it (referencing 'Morning', 'Afternoon', 'Night' in prescription notes)?
+               - Confirm the dosage (e.g., 500mg, 1 tablet).
+            4. **RESPONSE**: 
+               - Tell the user exactly what the medicine is.
+               - Tell them if it matches their doctor's prescription.
+               - Tell them exactly WHEN the doctor said to take it and WHAT it is for.
+            5. **LANGUAGE**: Provide the entire instruction in ${input.language}. Keep it extremely simple, bold, and reassuring for a senior citizen.` },
             { media: { url: `data:image/jpeg;base64,${input.imageBase64}` } }
         ],
         output: { schema: AIPillDetectionOutputSchema },

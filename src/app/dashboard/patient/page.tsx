@@ -249,18 +249,27 @@ export default function PatientDashboard() {
                       <Stethoscope className="h-8 w-8" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-base">Digital Records</h4>
-                      <p className="text-xs text-muted-foreground">Verify prescriptions & labs</p>
+                      <h4 className="font-bold text-base">Family Health Records</h4>
+                      <p className="text-xs text-muted-foreground">Prescriptions, visits & lab reports</p>
                       <Badge variant="outline" className="mt-2 border-accent text-accent text-[10px]">Secure Access</Badge>
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    className="w-full mt-6 rounded-xl group"
-                    onClick={() => router.push('/dashboard/patient/meds')}
-                  >
-                    View Meds <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                  </Button>
+                  <div className="flex gap-3 mt-6">
+                    <Button
+                      variant="outline"
+                      className="flex-1 rounded-xl group"
+                      onClick={() => router.push('/dashboard/patient/family')}
+                    >
+                      Health Records <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl group"
+                      onClick={() => router.push('/dashboard/patient/meds')}
+                    >
+                      Meds <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>

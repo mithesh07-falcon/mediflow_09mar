@@ -119,29 +119,28 @@ export async function detectBodyPart(input: AIBodyPartDetectionInput): Promise<A
             prompt: [
                 {
                     text: `You are an AI medical triage assistant for MediFlow Hospital.
-An elderly patient has shown you an image. Your ONE JOB is to identify 
-which body part or area they are pointing to or showing discomfort in, 
-and then map it to exactly one of the symptom IDs below.
-
-═══════════════ SYMPTOM ID MAPPING (use EXACTLY these values) ════════════════
-  "heart"   → Chest, Heart area, upper left torso  →  Cardiologist
-  "bones"   → Hand, Arm, Leg, Knee, Back, Hip, Shoulder, any Joint  →  Orthopedics
-  "eyes"    → Eyes, Vision area  →  Ophthalmologist
-  "dental"  → Mouth, Teeth, Jaw, Gums  →  Dentist
-  "ent"     → Ear, Nose, Throat, Neck (front)  →  ENT Specialist
-  "stomach" → Belly, Abdomen, Lower torso  →  Gastroenterologist
-  "neuro"   → Head, Temple, Forehead (headache), Scalp  →  Neurologist
-  "skin"    → Skin rash, Patches, Itching areas  →  Dermatologist
-  "fever"   → General unwellness, No specific body part  →  General Physician
-══════════════════════════════════════════════════════════════════════════════
+An elderly patient has provided a voice note and an image. Your goal is to identify 
+the medical concern and suggest the most relevant specialist.
 
 STRICT MULTIMODAL RULES:
-1. USE THE VOICE TRANSCRIPT: If the patient speaks in Hindi, Telugu, Tamil, or English, understand their symptoms.
-2. USE THE IMAGE: Identify the body part shown.
-3. FUSION: Combine these inputs.
-4. REGIONAL LANGUAGE: If the voice transcript is in a regional language, respond with a comfort message (reason) in that same language if possible.
+1. **VOICE IS PRIORITY**: The voice transcript is the most accurate source of symptoms. If the patient says "my eyes hurt" but shows a generic photo, map to "eyes".
+2. **REGIONAL LANGUAGES**: The patient may speak in Hindi, Telugu, Tamil, Kannada, Bengali, or Marathi. Understand these regional terms (e.g., "dil" = heart, "pait" = stomach, "aankh" = eyes, "daant" = dental).
+3. **IMAGE AS CONTEXT**: Use the image to confirm the body part if the voice is unclear.
+4. **DOCTOR SELECTION**: Pick the BEST doctor name from the "Available Doctors" list whose specialty matches your determined specialty.
 
-Available doctors:
+═══════════════ SYMPTOM ID MAPPING (MANDATORY) ════════════════
+  "heart"   → Chest, Heart, Palpitations, "dil", "seena" → Specialist: Cardiology
+  "bones"   → Joints, Knee, Back, Broken bone, "haddi", "dard" → Specialist: Orthopedics
+  "eyes"    → Vision, Redness, Blur, "aankh", "nazar" → Specialist: Ophthalmology
+  "dental"  → Mouth, Teeth, Jaw, "daant", "munh" → Specialist: Dentistry
+  "ent"     → Ear, Nose, Throat, Hearing, "kaan", "naak", "gala" → Specialist: ENT
+  "stomach" → Digestion, Acid, Pain in belly, "pait", "gas" → Specialist: Gastroenterology
+  "neuro"   → Headache, Dizziness, Brain, "sar dard", "chakkar" → Specialist: Neurology
+  "skin"    → Rash, Itching, Scars, "khujli", "chamdi" → Specialist: Dermatology
+  "fever"   → Generic unwell, No specific area, Common cold → Specialist: General
+════════════════════════════════════════════════════════════════
+
+Available doctors (Select one whose specialty matches):
 ${input.staffList || "Dr. Brown (Cardiology), Dr. White (Orthopedics), Dr. Anderson (Ophthalmology), Dr. Wilson (Dentistry), Dr. Lee (ENT), Dr. Jones (Gastroenterology), Dr. Smith (Neurology), Dr. Miller (Dermatology), Dr. Taylor (General)"}
 
 PATIENT VOICE NOTE: "${input.voiceTranscript || "No voice note provided."}"
@@ -149,8 +148,8 @@ PATIENT VOICE NOTE: "${input.voiceTranscript || "No voice note provided."}"
 Respond with:
 - symptomId: one of the enum values
 - specialistType: the specialty name
-- predictedDoctorName: the matching doctor from the list above
-- reason: A gentle, comforting 1-sentence explanation for the elderly patient.`
+- predictedDoctorName: the matching doctor's FULL NAME from the list
+- reason: A gentle, comforting 1-sentence explanation in the same language the patient spoke.`
                 },
                 { media: { url: `data:image/jpeg;base64,${input.imageBase64}` } }
             ],
@@ -158,16 +157,26 @@ Respond with:
         });
 
         const output = result.output!;
+        const transcript = (input.voiceTranscript || "").toLowerCase();
 
-        // ── POST-VALIDATION: If the AI still returned "fever"/General for a body part,
-        //    check if the specialistType text hints at a real specialty and correct it.
-        if (output.symptomId === "fever") {
-            const specLower = (output.specialistType || "").toLowerCase();
-            for (const key of Object.keys(BODY_PART_MAP)) {
-                if (key === "fever") continue;
-                const entry = BODY_PART_MAP[key];
-                if (specLower.includes(entry.specKey.toLowerCase()) || specLower.includes(entry.specialistType.toLowerCase())) {
-                    console.log(`[AI:PostFix] Correcting symptomId from "fever" to "${key}" based on specialistType="${output.specialistType}"`);
+        // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI) ─────────────────────────
+        // Small keyword map to catch misses when AI defaults to 'fever'
+        const overrides: Record<string, string[]> = {
+            heart: ["heart", "chest", "dil", "seena", "beats"],
+            bones: ["bone", "joint", "haddi", "knee", "back", "ghutna", "kamar"],
+            eyes: ["eye", "vision", "aankh", "nazar", "chashma"],
+            dental: ["tooth", "teeth", "gum", "daant", "munh"],
+            ent: ["ear", "nose", "throat", "kaan", "naak", "gala"],
+            stomach: ["stomach", "belly", "pait", "gas", "digestion"],
+            neuro: ["headache", "brain", "sar", "head", "chakkar"],
+            skin: ["skin", "rash", "itch", "chamdi", "khujli"]
+        };
+
+        for (const [id, keys] of Object.entries(overrides)) {
+            if (keys.some(k => transcript.includes(k.toLowerCase()))) {
+                if (output.symptomId === "fever" || output.symptomId !== id) {
+                    console.log(`[AI:Override] Transcript "${transcript}" triggered ${id} override.`);
+                    const entry = BODY_PART_MAP[id as keyof typeof BODY_PART_MAP];
                     return {
                         symptomId: entry.symptomId,
                         specialistType: entry.specialistType,
@@ -176,6 +185,12 @@ Respond with:
                     };
                 }
             }
+        }
+
+        // Final sanity check for doctor name
+        if (!input.staffList?.includes(output.predictedDoctorName)) {
+            const specKey = BODY_PART_MAP[output.symptomId].specKey;
+            output.predictedDoctorName = findDoctorForSpec(specKey, input.staffList);
         }
 
         return output;

@@ -11,17 +11,40 @@ import {
   Trash2,
   Heart,
   User,
-  Plus
+  Plus,
+  FileText,
+  Calendar,
+  Stethoscope,
+  Activity,
+  ChevronRight,
+  Shield,
+  ClipboardList,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import Image from "next/image";
+import Link from "next/link";
 
 interface FamilyMember {
   id: string;
   name: string;
   relation: string;
   age: string;
+  bloodGroup?: string;
+  gender?: string;
   symptoms?: string;
   seed: string;
 }
@@ -32,8 +55,10 @@ export default function FamilyProfilesPage() {
   const [newName, setNewName] = useState("");
   const [newRelation, setNewRelation] = useState("");
   const [newAge, setNewAge] = useState("");
-  const [newSymptoms, setNewSymptoms] = useState("");
+  const [newBloodGroup, setNewBloodGroup] = useState("");
+  const [newGender, setNewGender] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [recordCounts, setRecordCounts] = useState<Record<string, { manual: number; auto: number }>>({});
 
   useEffect(() => {
     const activeUserStr = localStorage.getItem("mediflow_current_user");
@@ -46,26 +71,67 @@ export default function FamilyProfilesPage() {
     }
 
     const saved = localStorage.getItem("mediflow_family_members");
+    let loadedMembers: FamilyMember[];
     if (saved) {
       const parsedMembers = JSON.parse(saved);
-      // Ensure "Self" profile always reflects the current logged-in user's name and age
       const updatedMembers = parsedMembers.map((m: FamilyMember) =>
-        m.relation === 'Self' ? { ...m, name: currentUserName, age: currentUserAge } : m
+        m.relation === "Self"
+          ? { ...m, name: currentUserName, age: currentUserAge }
+          : m
       );
+      loadedMembers = updatedMembers;
       setMembers(updatedMembers);
-      localStorage.setItem("mediflow_family_members", JSON.stringify(updatedMembers));
+      localStorage.setItem(
+        "mediflow_family_members",
+        JSON.stringify(updatedMembers)
+      );
     } else {
       const defaults = [
-        { id: "1", name: currentUserName, relation: "Self", age: currentUserAge, seed: "10" }
+        {
+          id: "1",
+          name: currentUserName,
+          relation: "Self",
+          age: currentUserAge,
+          seed: "10",
+        },
       ];
+      loadedMembers = defaults;
       setMembers(defaults);
-      localStorage.setItem("mediflow_family_members", JSON.stringify(defaults));
+      localStorage.setItem(
+        "mediflow_family_members",
+        JSON.stringify(defaults)
+      );
     }
+
+    // Count records for each member
+    const allAppts = JSON.parse(
+      localStorage.getItem("mediflow_appointments") || "[]"
+    );
+    const counts: Record<string, { manual: number; auto: number }> = {};
+    loadedMembers.forEach((m) => {
+      const manualRecords = JSON.parse(
+        localStorage.getItem(`mediflow_health_records_${m.id}`) || "[]"
+      );
+      const autoRecords = allAppts.filter(
+        (a: any) =>
+          a.patient === m.name &&
+          (a.status === "Completed" || a.status === "Confirmed")
+      );
+      counts[m.id] = {
+        manual: manualRecords.length,
+        auto: autoRecords.length,
+      };
+    });
+    setRecordCounts(counts);
   }, []);
 
   const handleAddMember = () => {
     if (!newName || !newRelation || !newAge) {
-      toast({ variant: "destructive", title: "Missing Info", description: "Please fill in Name, Relation, and Age." });
+      toast({
+        variant: "destructive",
+        title: "Missing Info",
+        description: "Please fill in Name, Relation, and Age.",
+      });
       return;
     }
 
@@ -74,27 +140,74 @@ export default function FamilyProfilesPage() {
       name: newName,
       relation: newRelation,
       age: newAge,
-      symptoms: newSymptoms,
-      seed: Math.floor(Math.random() * 100).toString()
+      bloodGroup: newBloodGroup || undefined,
+      gender: newGender || undefined,
+      seed: Math.floor(Math.random() * 100).toString(),
     };
 
     const updated = [...members, newMember];
     setMembers(updated);
     localStorage.setItem("mediflow_family_members", JSON.stringify(updated));
+    setRecordCounts((prev) => ({
+      ...prev,
+      [newMember.id]: { manual: 0, auto: 0 },
+    }));
 
     setNewName("");
     setNewRelation("");
     setNewAge("");
-    setNewSymptoms("");
+    setNewBloodGroup("");
+    setNewGender("");
     setIsAdding(false);
 
-    toast({ title: "Profile Created", description: `${newName} has been added to your family group.` });
+    toast({
+      title: "Profile Created",
+      description: `${newName} has been added to your family group.`,
+    });
   };
 
   const removeMember = (id: string) => {
-    const updated = members.filter(m => m.id !== id);
+    const updated = members.filter((m) => m.id !== id);
     setMembers(updated);
     localStorage.setItem("mediflow_family_members", JSON.stringify(updated));
+    // Also clean up their health records
+    localStorage.removeItem(`mediflow_health_records_${id}`);
+    toast({
+      title: "Profile Removed",
+      description: "Family member and their records have been removed.",
+    });
+  };
+
+  const getRelationIcon = (relation: string) => {
+    const r = relation.toLowerCase();
+    if (r === "self") return <Shield className="h-10 w-10 text-primary" />;
+    if (
+      r.includes("elder") ||
+      r.includes("grandpa") ||
+      r.includes("grandma") ||
+      r.includes("grandfather") ||
+      r.includes("grandmother")
+    )
+      return <Heart className="h-10 w-10 text-rose-500" />;
+    if (r.includes("child") || r.includes("son") || r.includes("daughter"))
+      return <Activity className="h-10 w-10 text-amber-500" />;
+    return <User className="h-10 w-10 text-primary" />;
+  };
+
+  const getRelationColor = (relation: string) => {
+    const r = relation.toLowerCase();
+    if (r === "self") return "from-primary/10 to-primary/5";
+    if (
+      r.includes("elder") ||
+      r.includes("grandpa") ||
+      r.includes("grandma")
+    )
+      return "from-rose-50 to-rose-100/30";
+    if (r.includes("child") || r.includes("son") || r.includes("daughter"))
+      return "from-amber-50 to-amber-100/30";
+    if (r.includes("spouse") || r.includes("wife") || r.includes("husband"))
+      return "from-violet-50 to-violet-100/30";
+    return "from-sky-50 to-sky-100/30";
   };
 
   return (
@@ -104,8 +217,13 @@ export default function FamilyProfilesPage() {
       <main className="flex-1 p-8 bg-slate-50">
         <header className="flex justify-between items-start mb-12">
           <div>
-            <h1 className="text-4xl font-headline font-bold text-primary mb-1">Family Management</h1>
-            <p className="text-muted-foreground">Manage health profiles for your household.</p>
+            <h1 className="text-4xl font-headline font-bold text-primary mb-1">
+              Family Management
+            </h1>
+            <p className="text-muted-foreground">
+              Manage health profiles for your household. Each profile stores
+              appointments, prescriptions, and health records.
+            </p>
           </div>
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
             <DialogTrigger asChild>
@@ -120,61 +238,208 @@ export default function FamilyProfilesPage() {
               <div className="space-y-4 py-4">
                 <div className="space-y-1">
                   <Label>Full Name</Label>
-                  <Input placeholder="e.g. Mary Jane" value={newName} onChange={e => setNewName(e.target.value)} />
+                  <Input
+                    placeholder="e.g. Mary Jane"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label>Relation</Label>
-                    <Input placeholder="e.g. Mother" value={newRelation} onChange={e => setNewRelation(e.target.value)} />
+                    <Select value={newRelation} onValueChange={setNewRelation}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Mother">Mother</SelectItem>
+                        <SelectItem value="Father">Father</SelectItem>
+                        <SelectItem value="Spouse">Spouse</SelectItem>
+                        <SelectItem value="Brother">Brother</SelectItem>
+                        <SelectItem value="Sister">Sister</SelectItem>
+                        <SelectItem value="Son">Son</SelectItem>
+                        <SelectItem value="Daughter">Daughter</SelectItem>
+                        <SelectItem value="Grandpa">Grandpa</SelectItem>
+                        <SelectItem value="Grandma">Grandma</SelectItem>
+                        <SelectItem value="Elderly">Elderly</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1">
                     <Label>Age</Label>
-                    <Input type="number" placeholder="Age" value={newAge} onChange={e => setNewAge(e.target.value)} />
+                    <Input
+                      type="number"
+                      placeholder="Age"
+                      value={newAge}
+                      onChange={(e) => setNewAge(e.target.value)}
+                    />
                   </div>
                 </div>
-                <Button className="w-full h-12 mt-4" onClick={handleAddMember}>Create Profile</Button>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label>Gender</Label>
+                    <Select value={newGender} onValueChange={setNewGender}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Blood Group</Label>
+                    <Select
+                      value={newBloodGroup}
+                      onValueChange={setNewBloodGroup}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A+">A+</SelectItem>
+                        <SelectItem value="A-">A-</SelectItem>
+                        <SelectItem value="B+">B+</SelectItem>
+                        <SelectItem value="B-">B-</SelectItem>
+                        <SelectItem value="O+">O+</SelectItem>
+                        <SelectItem value="O-">O-</SelectItem>
+                        <SelectItem value="AB+">AB+</SelectItem>
+                        <SelectItem value="AB-">AB-</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button
+                  className="w-full h-12 mt-4"
+                  onClick={handleAddMember}
+                >
+                  Create Profile
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {members.map(member => (
-            <Card key={member.id} className="rounded-[3rem] border-none shadow-sm hover:shadow-xl transition-all group overflow-hidden bg-white">
-              <div className="h-40 bg-primary/5 group-hover:bg-primary/10 transition-colors flex items-center justify-center relative">
-                <Image
-                  src={`https://picsum.photos/seed/${member.seed}/400/200`}
-                  fill
-                  className="object-cover opacity-20"
-                  alt=""
-                />
-                <div className="z-10 bg-white p-4 rounded-full shadow-lg">
-                  {member.relation === 'Elderly' || member.relation === 'Grandpa' ? <Heart className="h-10 w-10 text-primary" /> : <User className="h-10 w-10 text-primary" />}
+          {members.map((member) => {
+            const counts = recordCounts[member.id] || {
+              manual: 0,
+              auto: 0,
+            };
+            const totalRecords = counts.manual + counts.auto;
+
+            return (
+              <Card
+                key={member.id}
+                className="rounded-[3rem] border-none shadow-sm hover:shadow-xl transition-all group overflow-hidden bg-white"
+              >
+                <div
+                  className={`h-40 bg-gradient-to-br ${getRelationColor(member.relation)} group-hover:opacity-90 transition-all flex items-center justify-center relative`}
+                >
+                  <Image
+                    src={`https://picsum.photos/seed/${member.seed}/400/200`}
+                    fill
+                    className="object-cover opacity-15"
+                    alt=""
+                  />
+                  <div className="z-10 bg-white p-4 rounded-full shadow-lg group-hover:scale-110 transition-transform">
+                    {getRelationIcon(member.relation)}
+                  </div>
                 </div>
-              </div>
-              <CardContent className="p-8">
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h3 className="text-2xl font-bold uppercase tracking-tight">{member.name}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="rounded-full px-3">{member.relation}</Badge>
-                      <span className="text-sm text-muted-foreground">{member.age} Years Old</span>
+                <CardContent className="p-8">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-2xl font-bold uppercase tracking-tight">
+                        {member.name}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge
+                          variant="secondary"
+                          className="rounded-full px-3"
+                        >
+                          {member.relation}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {member.age} Years Old
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        {member.gender && (
+                          <span className="text-xs text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
+                            {member.gender}
+                          </span>
+                        )}
+                        {member.bloodGroup && (
+                          <span className="text-xs font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">
+                            {member.bloodGroup}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {member.relation !== "Self" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => removeMember(member.id)}
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Record Stats */}
+                  <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-2xl mb-6">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <ClipboardList className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-bold text-foreground">
+                        {totalRecords}
+                      </span>{" "}
+                      Records
+                    </div>
+                    <div className="h-4 w-px bg-slate-200" />
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Stethoscope className="h-3.5 w-3.5 text-emerald-500" />
+                      <span className="font-bold text-foreground">
+                        {counts.auto}
+                      </span>{" "}
+                      Visits
+                    </div>
+                    <div className="h-4 w-px bg-slate-200" />
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <FileText className="h-3.5 w-3.5 text-orange-400" />
+                      <span className="font-bold text-foreground">
+                        {counts.manual}
+                      </span>{" "}
+                      Manual
                     </div>
                   </div>
-                  {member.relation !== 'Self' && (
-                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => removeMember(member.id)}>
-                      <Trash2 className="h-5 w-5" />
-                    </Button>
-                  )}
-                </div>
 
-                <div className="grid grid-cols-2 gap-3 mt-8">
-                  <Button variant="outline" className="h-12 rounded-2xl text-sm font-bold">Health History</Button>
-                  <Button variant="secondary" className="h-12 rounded-2xl text-sm font-bold">Edit Profile</Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="grid grid-cols-1 gap-3">
+                    <Link href={`/dashboard/patient/family/${member.id}`}>
+                      <Button className="w-full h-12 rounded-2xl text-sm font-bold gap-2 shadow-sm">
+                        <FileText className="h-4 w-4" />
+                        View Health Records
+                        <ChevronRight className="h-4 w-4 ml-auto" />
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/patient/appointments">
+                      <Button
+                        variant="outline"
+                        className="w-full h-10 rounded-2xl text-sm font-bold gap-2"
+                      >
+                        <Calendar className="h-4 w-4" />
+                        Book Appointment
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
 
           <button
             onClick={() => setIsAdding(true)}
@@ -184,6 +449,9 @@ export default function FamilyProfilesPage() {
               <Plus className="h-10 w-10" />
             </div>
             <span className="font-bold text-xl">New Profile</span>
+            <span className="text-sm text-slate-400 group-hover:text-primary/60">
+              Add a family member
+            </span>
           </button>
         </div>
       </main>
