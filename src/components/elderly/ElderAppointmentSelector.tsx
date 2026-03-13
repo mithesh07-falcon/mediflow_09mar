@@ -80,7 +80,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     useEffect(() => {
         let stream: MediaStream | null = null;
         if (mode === "camera" && step === 1) {
-            navigator.mediaDevices.getUserMedia({ video: true })
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false }) // Audio access handled by SpeechRecognition
                 .then(s => {
                     stream = s;
                     if (videoRef.current) videoRef.current.srcObject = s;
@@ -90,6 +90,31 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         }
         return () => stream?.getTracks().forEach(t => t.stop());
     }, [mode, step]);
+
+    const activateScanner = () => {
+        if (mode === "camera") return;
+        setMode("camera");
+        
+        const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+        const langMap: Record<string, string> = { English: "en-US", Hindi: "hi-IN", Tamil: "ta-IN", Telugu: "te-IN" };
+        const promptMap: Record<string, string> = { English: "Please talk", Hindi: "कृपया बोलें", Tamil: "தயவுசெய்து பேசுங்கள்", Telugu: "దయచేసి మాట్లాడండి" };
+        
+        const langCode = langMap[user.language] || "en-US";
+        const promptText = promptMap[user.language] || promptMap.English;
+
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(promptText);
+            utterance.lang = langCode;
+            utterance.rate = 0.9;
+            utterance.onend = () => {
+                startVoiceRecording();
+            };
+            window.speechSynthesis.speak(utterance);
+        } else {
+            startVoiceRecording();
+        }
+    };
 
     const startVoiceRecording = () => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -203,7 +228,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                     <div className="flex gap-4 mb-8">
                         <Button 
                             className={cn("flex-1 h-20 text-2xl font-black rounded-3xl border-4", mode === 'camera' ? 'bg-black text-white border-black' : 'bg-white text-slate-400 border-slate-100')}
-                            onClick={() => setMode('camera')}
+                            onClick={activateScanner}
                         >
                             <Camera className="mr-2" /> AI SCAN
                         </Button>
@@ -244,6 +269,12 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                         <h3 className="text-3xl font-black text-green-400">ANALYZING...</h3>
                                     </div>
                                 )}
+                                {isListening && !isScanning && (
+                                    <div className="absolute top-4 right-4 bg-red-600/90 text-white px-4 py-2 rounded-full flex flex-col items-center animate-pulse border-2 border-white shadow-lg">
+                                        <Mic className="h-6 w-6 mb-1" />
+                                        <span className="text-xs font-bold tracking-widest uppercase">LISTENING</span>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-col gap-4">
                                 <div className="flex gap-4">
@@ -251,7 +282,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                         className={cn("flex-1 h-32 text-3xl font-black rounded-[2.5rem] border-[10px]", isListening ? "bg-red-600 border-red-800 text-white animate-pulse" : "bg-white text-black border-black")}
                                         onClick={startVoiceRecording}
                                     >
-                                        <Mic className="mr-2 h-10 w-10" /> {voiceTranscript ? "GOT IT" : "SPEAK"}
+                                        <Mic className="mr-2 h-10 w-10" /> {voiceTranscript ? "RE-RECORD" : "SPEAK"}
                                     </Button>
                                     <Button 
                                         className="flex-1 h-32 text-3xl font-black bg-black text-white rounded-[2.5rem] border-[10px] border-black"
