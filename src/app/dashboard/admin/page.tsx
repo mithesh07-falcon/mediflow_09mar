@@ -400,14 +400,39 @@ export default function FormalAdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {staff.filter(s => s.role === 'doctor').map(d => (
-                        <TableRow key={d.id} className="hover:bg-slate-50 transition-colors">
-                          <TableCell className="pl-8 font-bold py-6">{d.name}</TableCell>
-                          <TableCell>{d.specialization}</TableCell>
-                          <TableCell className="text-xs">{d.email}</TableCell>
-                          <TableCell className="text-right pr-8"><Badge className="bg-green-100 text-green-700">ACTIVE</Badge></TableCell>
-                        </TableRow>
-                      ))}
+                      {staff.filter(s => s.role === 'doctor').map(d => {
+                        const logs = JSON.parse(localStorage.getItem("mediflow_staff_attendance") || "[]");
+                        const todayStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                        const myLog = logs.find((l: any) => l.email === d.email && l.date === todayStr);
+                        
+                        let screenTimeStr = "Offline";
+                        if (myLog?.timestamp) {
+                          const diff = new Date().getTime() - new Date(myLog.timestamp).getTime();
+                          const hrs = Math.floor(diff / (1000 * 60 * 60));
+                          const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                          screenTimeStr = `${hrs}h ${mins}m`;
+                        }
+
+                        return (
+                          <TableRow key={d.id} className="hover:bg-slate-50 transition-colors">
+                            <TableCell className="pl-8 font-bold py-6">{d.name}</TableCell>
+                            <TableCell>{d.specialization}</TableCell>
+                            <TableCell className="text-xs">{d.email}</TableCell>
+                            <TableCell className="text-right pr-8">
+                              {myLog ? (
+                                <div className="flex flex-col items-end gap-1">
+                                  <Badge className={myLog.status === 'Present' ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>
+                                    {myLog.status} ({myLog.loginTime})
+                                  </Badge>
+                                  <span className="text-[9px] font-bold text-muted-foreground">Online: {screenTimeStr}</span>
+                                </div>
+                              ) : (
+                                <Badge className="bg-slate-100 text-slate-500">AWAY</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -428,14 +453,39 @@ export default function FormalAdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {staff.filter(s => s.role === 'pharmacist').map(p => (
-                        <TableRow key={p.id} className="hover:bg-slate-50 transition-colors">
-                          <TableCell className="pl-8 font-bold py-6">{p.name}</TableCell>
-                          <TableCell>{p.pharmacyId || "Global Warehouse"}</TableCell>
-                          <TableCell className="text-xs">{p.email}</TableCell>
-                          <TableCell className="text-right pr-8"><Badge className="bg-blue-100 text-blue-700">AUTHORIZED</Badge></TableCell>
-                        </TableRow>
-                      ))}
+                      {staff.filter(s => s.role === 'pharmacist').map(p => {
+                        const logs = JSON.parse(localStorage.getItem("mediflow_staff_attendance") || "[]");
+                        const todayStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                        const myLog = logs.find((l: any) => l.email === p.email && l.date === todayStr);
+                        
+                        let screenTimeStr = "Offline";
+                        if (myLog?.timestamp) {
+                           const diff = new Date().getTime() - new Date(myLog.timestamp).getTime();
+                           const hrs = Math.floor(diff / (1000 * 60 * 60));
+                           const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                           screenTimeStr = `${hrs}h ${mins}m`;
+                        }
+
+                        return (
+                          <TableRow key={p.id} className="hover:bg-slate-50 transition-colors">
+                            <TableCell className="pl-8 font-bold py-6">{p.name}</TableCell>
+                            <TableCell>{p.pharmacyId || "Global Warehouse"}</TableCell>
+                            <TableCell className="text-xs">{p.email}</TableCell>
+                            <TableCell className="text-right pr-8">
+                              {myLog ? (
+                                <div className="flex flex-col items-end gap-1">
+                                  <Badge className={myLog.status === 'Present' ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>
+                                    {myLog.status} ({myLog.loginTime})
+                                  </Badge>
+                                  <span className="text-[9px] font-bold text-muted-foreground">Online: {screenTimeStr}</span>
+                                </div>
+                              ) : (
+                                <Badge className="bg-slate-100 text-slate-500">AWAY</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </CardContent>

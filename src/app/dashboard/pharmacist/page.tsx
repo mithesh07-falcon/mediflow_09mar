@@ -40,6 +40,7 @@ export default function PharmacistDashboard() {
   const [pendingQueue, setPendingQueue] = useState<any[]>([]);
   const [showBill, setShowBill] = useState<any>(null);
   const [inventory, setInventory] = useState<any[]>([]);
+  const [attendance, setAttendance] = useState<{status: string, loginTime: string, screenTimeStr: string} | null>(null);
 
   // Complaint State
   const [complaintMed, setComplaintMed] = useState("");
@@ -57,14 +58,42 @@ export default function PharmacistDashboard() {
         console.error("Failed to fetch medicines", e);
       }
     };
+    
+    // Attendance Tracking
+    const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+    const updateAttendance = () => {
+      const todayStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const logs = JSON.parse(localStorage.getItem("mediflow_staff_attendance") || "[]");
+      const myLog = logs.find((l: any) => l.email === user.email && l.date === todayStr);
+      const lastLogin = localStorage.getItem("mediflow_last_login");
+
+      let screenTimeStr = "0h 0m";
+      if (lastLogin) {
+         const diff = new Date().getTime() - new Date(lastLogin).getTime();
+         const hrs = Math.floor(diff / (1000 * 60 * 60));
+         const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+         screenTimeStr = `${hrs}h ${mins}m`;
+      }
+
+      if (myLog) {
+         setAttendance({
+           status: myLog.status,
+           loginTime: myLog.loginTime,
+           screenTimeStr
+         });
+      }
+    };
 
     fetchMeds();
     fetchQueue();
-    const interval = setInterval(() => {
+    updateAttendance();
+
+    const intervalSettings = setInterval(() => {
       fetchMeds();
       fetchQueue();
+      updateAttendance();
     }, 5000);
-    return () => clearInterval(interval);
+    return () => clearInterval(intervalSettings);
   }, []);
 
   const fetchQueue = () => {
@@ -193,7 +222,17 @@ export default function PharmacistDashboard() {
         <header className="mb-12 flex justify-between items-center">
           <div>
             <h1 className="text-5xl font-headline font-bold text-primary mb-1 tracking-tight">Pharmacy System Hub</h1>
-            <p className="text-muted-foreground text-lg">Integrated Clinical Dispensing & Inventory Control.</p>
+            <p className="text-muted-foreground text-lg mb-2">Integrated Clinical Dispensing & Inventory Control.</p>
+            {attendance && (
+              <div className="flex gap-2">
+                <Badge className={`px-3 py-1 font-bold uppercase tracking-widest text-[10px] ${attendance.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                   {attendance.status}: {attendance.loginTime}
+                </Badge>
+                <Badge variant="outline" className="px-3 py-1 font-bold uppercase tracking-widest text-[10px] border-primary/20 bg-slate-50">
+                   Screen Time: {attendance.screenTimeStr}
+                </Badge>
+              </div>
+            )}
           </div>
           <div className="flex gap-4">
             <Dialog>

@@ -193,6 +193,7 @@ export default function DoctorDashboard() {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [doctorInfo, setDoctorInfo] = useState<any>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [attendance, setAttendance] = useState<{status: string, loginTime: string, screenTimeStr: string} | null>(null);
 
   const fetchAppts = (user: any) => {
     const savedAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
@@ -214,8 +215,38 @@ export default function DoctorDashboard() {
     const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
     setDoctorInfo(user);
     fetchAppts(user);
+    
+    // Attendance Tracking
+    const updateAttendance = () => {
+      const todayStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const logs = JSON.parse(localStorage.getItem("mediflow_staff_attendance") || "[]");
+      const myLog = logs.find((l: any) => l.email === user.email && l.date === todayStr);
+      const lastLogin = localStorage.getItem("mediflow_last_login");
+
+      let screenTimeStr = "0h 0m";
+      if (lastLogin) {
+         const diff = new Date().getTime() - new Date(lastLogin).getTime();
+         const hrs = Math.floor(diff / (1000 * 60 * 60));
+         const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+         screenTimeStr = `${hrs}h ${mins}m`;
+      }
+
+      if (myLog) {
+         setAttendance({
+           status: myLog.status,
+           loginTime: myLog.loginTime,
+           screenTimeStr
+         });
+      }
+    };
+
+    updateAttendance();
+    const intervalAtt = setInterval(updateAttendance, 60000); // 1 minute
     const interval = setInterval(() => fetchAppts(user), 4000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearInterval(intervalAtt);
+    };
   }, []);
 
   // Internal status updater
@@ -287,6 +318,16 @@ export default function DoctorDashboard() {
             <p className="text-muted-foreground">{doctorInfo?.specialization || "General Practice"} Registry</p>
           </div>
           <div className="flex items-center gap-3">
+            {attendance && (
+              <div className="flex gap-2">
+                <Badge className={`px-3 py-2 font-bold uppercase tracking-widest text-[10px] ${attendance.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                   {attendance.status}: {attendance.loginTime}
+                </Badge>
+                <Badge variant="outline" className="px-3 py-2 font-bold uppercase tracking-widest text-[10px] border-primary/20 bg-slate-50">
+                   Screen Time: {attendance.screenTimeStr}
+                </Badge>
+              </div>
+            )}
             <Button variant="outline" className="rounded-xl" onClick={() => router.push("/dashboard/doctor/schedule")}>
               <Calendar className="h-4 w-4 mr-2" /> My Schedule
             </Button>

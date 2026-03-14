@@ -51,6 +51,32 @@ export default function LoginPage() {
         }
 
         const doc = result.doctor;
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric" });
+        
+        let status = "Late";
+        if (now.getHours() < 9 || (now.getHours() === 9 && now.getMinutes() <= 30)) {
+          status = "Present";
+        }
+
+        const attendanceLogs = JSON.parse(localStorage.getItem("mediflow_staff_attendance") || "[]");
+        const existingLogIndex = attendanceLogs.findIndex((log: any) => log.email === doc.email && log.date === dateStr);
+        if (existingLogIndex === -1) {
+             attendanceLogs.push({
+                 id: `${doc.email}-${dateStr}`,
+                 name: doc.name,
+                 email: doc.email,
+                 role: 'doctor',
+                 date: dateStr,
+                 loginTime: timeStr,
+                 status: status,
+                 timestamp: now.toISOString()
+             });
+             localStorage.setItem("mediflow_staff_attendance", JSON.stringify(attendanceLogs));
+        }
+
+        localStorage.setItem("mediflow_last_login", now.toISOString());
         localStorage.setItem("mediflow_current_user", JSON.stringify({
           email: doc.email,
           role: 'doctor',
@@ -313,7 +339,16 @@ export default function LoginPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <form className="space-y-4" onSubmit={(e: any) => { e.preventDefault(); handleLogin('pharmacist', { email: e.target.email.value, password: e.target.password.value }); }}>
+                    <form className="space-y-4" onSubmit={async (e: any) => { 
+                      e.preventDefault(); 
+                      const pharmacistEmail = e.target.email.value;
+                      const pharmacistPassword = e.target.password.value;
+                      
+                      // Inject attendance logic before handLogin returns or handles it, or handle it inside handleLogin if we passed more details. 
+                      // Wait, handleLogin takes (role, data). The actual code for Pharmacist login is in handleLogin. 
+                      // Let me fix my approach - the easiest way is to re-factor the handleLogin function up top.
+                      await handleLogin('pharmacist', { email: pharmacistEmail, password: pharmacistPassword }); 
+                    }}>
                       <div className="space-y-2">
                         <Label htmlFor="ph-email">Pharmacy ID (Email)</Label>
                         <Input id="ph-email" name="email" type="email" placeholder="pharmacy.hq@mediflow.com" required />
