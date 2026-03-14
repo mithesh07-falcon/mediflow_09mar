@@ -125,6 +125,20 @@ function findDoctorForSpec(specKey: string, staffJson?: string): string {
 }
 
 export async function detectBodyPart(input: AIBodyPartDetectionInput): Promise<AIBodyPartDetectionOutput> {
+    const transcript = (input.voiceTranscript || "").toLowerCase();
+    
+    // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI) ─────────────────────────
+    const overrides: Record<string, string[]> = {
+        heart: ["heart", "chest", "dil", "seena", "beats", "palpitation"],
+        bones: ["bone", "joint", "haddi", "knee", "back", "ghutna", "kamar", "muscle", "pain"],
+        eyes: ["eye", "vision", "aankh", "nazar", "chashma", "blur"],
+        dental: ["tooth", "teeth", "gum", "daant", "munh", "jaw"],
+        ent: ["ear", "nose", "throat", "kaan", "naak", "gala", "hearing", "kan"],
+        stomach: ["stomach", "belly", "pait", "gas", "digestion", "acid"],
+        neuro: ["headache", "brain", "sar", "head", "chakkar", "dizzy"],
+        skin: ["skin", "rash", "itch", "chamdi", "khujli", "scar"]
+    };
+
     try {
         const result = await ai.generate({
             prompt: [
@@ -170,19 +184,6 @@ Respond with:
         });
 
         const output = result.output!;
-        const transcript = (input.voiceTranscript || "").toLowerCase();
-
-        // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI) ─────────────────────────
-        const overrides: Record<string, string[]> = {
-            heart: ["heart", "chest", "dil", "seena", "beats"],
-            bones: ["bone", "joint", "haddi", "knee", "back", "ghutna", "kamar"],
-            eyes: ["eye", "vision", "aankh", "nazar", "chashma"],
-            dental: ["tooth", "teeth", "gum", "daant", "munh"],
-            ent: ["ear", "nose", "throat", "kaan", "naak", "gala"],
-            stomach: ["stomach", "belly", "pait", "gas", "digestion"],
-            neuro: ["headache", "brain", "sar", "head", "chakkar"],
-            skin: ["skin", "rash", "itch", "chamdi", "khujli"]
-        };
 
         for (const [id, keys] of Object.entries(overrides)) {
             if (keys.some(k => transcript.includes(k.toLowerCase()))) {
@@ -209,6 +210,21 @@ Respond with:
 
     } catch (err) {
         console.warn("[AI:Fallback] Body part detection AI failed.", err);
+
+        // Even if AI fails entirely, we can still use the transcript to do voice matching!
+        for (const [id, keys] of Object.entries(overrides)) {
+            if (keys.some(k => transcript.includes(k.toLowerCase()))) {
+                console.log(`[AI:Fallback] Voice match found for ${id} without AI.`);
+                const entry = BODY_PART_MAP[id as keyof typeof BODY_PART_MAP];
+                return {
+                    symptomId: entry.symptomId,
+                    specialistType: entry.specialistType,
+                    predictedDoctorName: findDoctorForSpec(entry.specKey, input.staffList),
+                    reason: entry.reason + " (AI unavailable; identified via voice match)",
+                    detectedSymptoms: [`Reported problem in ${id}`],
+                };
+            }
+        }
 
         const nonFeverKeys = Object.keys(BODY_PART_MAP).filter(k => k !== "fever");
         const randomKey = nonFeverKeys[Math.floor(Math.random() * nonFeverKeys.length)];
