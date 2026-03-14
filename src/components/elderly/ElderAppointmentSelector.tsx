@@ -108,13 +108,13 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
         const langMap: Record<string, string> = { English: "en-US", Hindi: "hi-IN", Tamil: "ta-IN", Telugu: "te-IN", Kannada: "kn-IN", Bengali: "bn-IN", Marathi: "mr-IN" };
         const promptMap: Record<string, string> = {
-            English: "Tell me where it hurts",
-            Hindi: "बताइए कहाँ दर्द है",
-            Tamil: "எங்கே வலிக்கிறது சொல்லுங்கள்",
-            Telugu: "ఎక్కడ నొప్పిగా ఉంది చెప్పండి",
-            Kannada: "ಎಲ್ಲಿ ನೋವಿದೆ ಹೇಳಿ",
-            Bengali: "কোথায় ব্যথা বলুন",
-            Marathi: "कुठे दुखतंय सांगा"
+            English: "Point your finger at where it hurts and tell me",
+            Hindi: "जहां दर्द है वहां उंगली दिखाएं और बताएं",
+            Tamil: "எங்கே வலிக்கிறது என்று விரலைக் காட்டி சொல்லுங்கள்",
+            Telugu: "ఎక్కడ నొప్పిగా ఉందో వేలు చూపించి చెప్పండి",
+            Kannada: "ಎಲ್ಲಿ ನೋವಿದೆ ಎಂದು ಬೆರಳು ತೋರಿಸಿ ಹೇಳಿ",
+            Bengali: "যেখানে ব্যথা সেখানে আঙুল দেখিয়ে বলুন",
+            Marathi: "जिथे दुखतंय तिथे बोट दाखवा आणि सांगा"
         };
         const langCode = langMap[user.language] || "en-US";
         const promptText = promptMap[user.language] || promptMap.English;
@@ -272,7 +272,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                 </CardTitle>
                 <CardDescription className="text-lg font-medium text-slate-600">
                     {step === 1 
-                        ? (mode === "manual" ? "Choose from the body areas below." : "Hold camera near the area and speak into the mic.")
+                        ? (mode === "manual" ? "Choose from the body areas below." : "Point your finger at the pain area and speak.")
                         : `Finding a ${selectedSymptomData?.specialist} for you.`}
                 </CardDescription>
             </CardHeader>
@@ -325,7 +325,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                                     <Mic className="h-16 w-16 text-red-400" />
                                                 </div>
                                                 <h3 className="text-3xl font-black text-red-400">LISTENING...</h3>
-                                                <p className="text-lg text-white/60 font-bold mt-2">Show the area & speak your symptoms</p>
+                                                <p className="text-lg text-white/60 font-bold mt-2">Point your finger at the pain & speak</p>
                                                 {voiceTranscript && (
                                                     <div className="mt-4 px-6 py-3 bg-white/10 rounded-2xl border border-white/20">
                                                         <p className="text-xl font-bold text-green-400">"{voiceTranscript}"</p>
@@ -363,7 +363,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                     )}
                                 </Button>
                                 <p className="text-center text-lg font-bold text-slate-400">
-                                    Point camera at pain area — mic will listen automatically
+                                    Point camera & your finger at pain area — mic listens automatically
                                 </p>
                                 <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
                                 <Button variant="link" className="text-slate-400 font-bold" onClick={() => fileInputRef.current?.click()}>

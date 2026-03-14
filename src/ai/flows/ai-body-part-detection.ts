@@ -136,7 +136,7 @@ the medical concern, extract the explicit symptoms visually from the image or ve
 STRICT MULTIMODAL RULES:
 1. **VOICE IS PRIORITY**: The voice transcript is the most accurate source of symptoms. If the patient says "my eyes hurt" but shows a generic photo, map to "eyes".
 2. **REGIONAL LANGUAGES**: The patient may speak in Hindi, Telugu, Tamil, Kannada, Bengali, or Marathi. Understand these regional terms (e.g., "dil" = heart, "pait" = stomach, "aankh" = eyes, "daant" = dental).
-3. **IMAGE AS CONTEXT**: Use the image to extract visual symptoms like "Redness", "Swelling", "Bruising" or to confirm the body part if the voice is unclear.
+3. **IMAGE AS CONTEXT & FINGER POINTING**: The patient has been instructed to **point their finger** at the area that hurts. **YOU MUST LOOK FOR THEIR FINGER OR HAND POINTING** in the image to determine the exact body part they are referring to. Also use the image to extract visual symptoms like "Red swollen knee", "Skin rash", etc.
 4. **DOCTOR SELECTION**: Pick the BEST doctor name from the "Available Doctors" list whose specialty matches your determined specialty.
 5. **DETECTED SYMPTOMS**: Provide a clear array of 2-3 specific symptoms you detected (e.g. ["Red swollen knee", "Reported pain"] or ["Rash on arm"]).
 
