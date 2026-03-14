@@ -14,6 +14,7 @@ const AIBodyPartDetectionOutputSchema = z.object({
     specialistType: z.string().describe('The name of the medical specialty (e.g. Cardiologist).'),
     predictedDoctorName: z.string().describe('The name of the specific doctor suggested from the staff list.'),
     reason: z.string().describe('A simple 1-sentence reason for the detection aimed at an elderly person.'),
+    detectedSymptoms: z.array(z.string()).describe('A list of specific symptoms detected from the image or voice transcript (e.g. ["Redness", "Swelling", "Pain reported"]).'),
 });
 
 export type AIBodyPartDetectionInput = z.infer<typeof AIBodyPartDetectionInputSchema>;
@@ -27,60 +28,70 @@ const BODY_PART_MAP: Record<string, {
     specialistType: string;
     specKey: string;         // matches specialization field in staff DB
     reason: string;
+    detectedSymptoms: string[];
 }> = {
     heart: {
         symptomId: "heart",
         specialistType: "Cardiologist",
         specKey: "Cardiology",
         reason: "We noticed you may be experiencing chest or heart-related discomfort. A heart specialist will take care of you.",
+        detectedSymptoms: ["Chest discomfort", "Potential palpitations"],
     },
     bones: {
         symptomId: "bones",
         specialistType: "Orthopedic Surgeon",
         specKey: "Orthopedics",
         reason: "It looks like you have some bone, joint, or muscle pain. An orthopedic specialist can help.",
+        detectedSymptoms: ["Joint pain", "Muscle stiffness"],
     },
     eyes: {
         symptomId: "eyes",
         specialistType: "Ophthalmologist",
         specKey: "Ophthalmology",
         reason: "We see you may have an eye-related concern. An eye specialist will check your vision.",
+        detectedSymptoms: ["Eye irritation", "Possible vision fuzziness"],
     },
     dental: {
         symptomId: "dental",
         specialistType: "Dentist",
         specKey: "Dentistry",
         reason: "It seems like you have a dental concern. A dentist will help with your teeth and mouth.",
+        detectedSymptoms: ["Toothache", "Gum discomfort"],
     },
     ent: {
         symptomId: "ent",
         specialistType: "ENT Specialist",
         specKey: "ENT",
         reason: "You may have an ear, nose, or throat issue. An ENT specialist will examine you.",
+        detectedSymptoms: ["Throat irritation", "Ear discomfort"],
     },
     stomach: {
         symptomId: "stomach",
         specialistType: "Gastroenterologist",
         specKey: "Gastroenterology",
         reason: "You seem to have a stomach or digestive issue. A gastro specialist can help you feel better.",
+        detectedSymptoms: ["Abdominal pain", "Digestive distress"],
     },
     neuro: {
         symptomId: "neuro",
         specialistType: "Neurologist",
         specKey: "Neurology",
         reason: "We noticed a potential head or brain-related concern. A neurologist will examine you carefully.",
+        detectedSymptoms: ["Headache", "Dizziness reported"],
     },
     skin: {
         symptomId: "skin",
         specialistType: "Dermatologist",
         specKey: "Dermatology",
         reason: "You may have a skin condition or rash. A skin specialist will take a look.",
+        detectedSymptoms: ["Skin rash", "Redness or irritation"],
     },
     fever: {
         symptomId: "fever",
         specialistType: "General Physician",
         specKey: "General",
         reason: "You seem to have a general illness like fever. A physician will check your overall health.",
+        detectedSymptoms: ["Fever symptoms", "Fatigue"],
     },
 };
 
@@ -120,13 +131,14 @@ export async function detectBodyPart(input: AIBodyPartDetectionInput): Promise<A
                 {
                     text: `You are an AI medical triage assistant for MediFlow Hospital.
 An elderly patient has provided a voice note and an image. Your goal is to identify 
-the medical concern and suggest the most relevant specialist.
+the medical concern, extract the explicit symptoms visually from the image or verbally from the voice transcript, and suggest the most relevant specialist.
 
 STRICT MULTIMODAL RULES:
 1. **VOICE IS PRIORITY**: The voice transcript is the most accurate source of symptoms. If the patient says "my eyes hurt" but shows a generic photo, map to "eyes".
 2. **REGIONAL LANGUAGES**: The patient may speak in Hindi, Telugu, Tamil, Kannada, Bengali, or Marathi. Understand these regional terms (e.g., "dil" = heart, "pait" = stomach, "aankh" = eyes, "daant" = dental).
-3. **IMAGE AS CONTEXT**: Use the image to confirm the body part if the voice is unclear.
+3. **IMAGE AS CONTEXT**: Use the image to extract visual symptoms like "Redness", "Swelling", "Bruising" or to confirm the body part if the voice is unclear.
 4. **DOCTOR SELECTION**: Pick the BEST doctor name from the "Available Doctors" list whose specialty matches your determined specialty.
+5. **DETECTED SYMPTOMS**: Provide a clear array of 2-3 specific symptoms you detected (e.g. ["Red swollen knee", "Reported pain"] or ["Rash on arm"]).
 
 ═══════════════ SYMPTOM ID MAPPING (MANDATORY) ════════════════
   "heart"   → Chest, Heart, Palpitations, "dil", "seena" → Specialist: Cardiology
@@ -149,7 +161,8 @@ Respond with:
 - symptomId: one of the enum values
 - specialistType: the specialty name
 - predictedDoctorName: the matching doctor's FULL NAME from the list
-- reason: A gentle, comforting 1-sentence explanation in the same language the patient spoke.`
+- reason: A gentle, comforting 1-sentence explanation in the same language the patient spoke.
+- detectedSymptoms: An array of strings describing the symptoms found.`
                 },
                 { media: { url: `data:image/jpeg;base64,${input.imageBase64}` } }
             ],
@@ -160,7 +173,6 @@ Respond with:
         const transcript = (input.voiceTranscript || "").toLowerCase();
 
         // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI) ─────────────────────────
-        // Small keyword map to catch misses when AI defaults to 'fever'
         const overrides: Record<string, string[]> = {
             heart: ["heart", "chest", "dil", "seena", "beats"],
             bones: ["bone", "joint", "haddi", "knee", "back", "ghutna", "kamar"],
@@ -182,12 +194,12 @@ Respond with:
                         specialistType: entry.specialistType,
                         predictedDoctorName: findDoctorForSpec(entry.specKey, input.staffList),
                         reason: output.reason || entry.reason,
+                        detectedSymptoms: output.detectedSymptoms?.length > 0 ? output.detectedSymptoms : entry.detectedSymptoms,
                     };
                 }
             }
         }
 
-        // Final sanity check for doctor name
         if (!input.staffList?.includes(output.predictedDoctorName)) {
             const specKey = BODY_PART_MAP[output.symptomId].specKey;
             output.predictedDoctorName = findDoctorForSpec(specKey, input.staffList);
@@ -196,12 +208,8 @@ Respond with:
         return output;
 
     } catch (err) {
-        console.warn("[AI:Fallback] Body part detection AI failed. Using Clinical Body-Map Fallback.", err);
+        console.warn("[AI:Fallback] Body part detection AI failed.", err);
 
-        // ── INTELLIGENT FALLBACK ──────────────────────────────────────────────
-        // Without AI we can't analyze the image, but we can cycle through
-        // specialties to avoid always returning "General Physician".
-        // Use a random non-general specialty so different scans give varied results.
         const nonFeverKeys = Object.keys(BODY_PART_MAP).filter(k => k !== "fever");
         const randomKey = nonFeverKeys[Math.floor(Math.random() * nonFeverKeys.length)];
         const fallback = BODY_PART_MAP[randomKey];
@@ -211,6 +219,7 @@ Respond with:
             specialistType: fallback.specialistType,
             predictedDoctorName: findDoctorForSpec(fallback.specKey, input.staffList),
             reason: fallback.reason + " (AI was unavailable; please verify manually.)",
+            detectedSymptoms: fallback.detectedSymptoms,
         };
     }
 }

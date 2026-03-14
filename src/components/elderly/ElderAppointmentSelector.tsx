@@ -35,6 +35,7 @@ export interface AppointmentRequest {
     timePreferenceLabel: string;
     predictedDoctorName?: string;
     reason?: string;
+    detectedSymptoms?: string[];
 }
 
 interface ElderAppointmentSelectorProps {
@@ -51,6 +52,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     const [staff, setStaff] = useState<any[]>([]);
     const [predictedDoctor, setPredictedDoctor] = useState<string | null>(null);
     const [scanReason, setScanReason] = useState<string | null>(null);
+    const [detectedSymptoms, setDetectedSymptoms] = useState<string[] | null>(null);
     
     // New Multimodal State
     const [isScanning, setIsScanning] = useState(false);
@@ -190,6 +192,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
 
                     setPredictedDoctor(response.predictedDoctorName);
                     setScanReason(response.reason);
+                    if (response.detectedSymptoms) setDetectedSymptoms(response.detectedSymptoms);
                     toast({ title: "Specialist Found!", description: response.reason });
                     handleSymptomSelect(response.symptomId);
                 } catch (error) {
@@ -226,6 +229,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                 const response = await detectBodyPart({ imageBase64: base64Image, voiceTranscript: voiceTranscript });
                 setPredictedDoctor(response.predictedDoctorName);
                 setScanReason(response.reason);
+                if (response.detectedSymptoms) setDetectedSymptoms(response.detectedSymptoms);
                 handleSymptomSelect(response.symptomId);
                 toast({ title: "Found a Specialist", description: response.reason });
             } catch {
@@ -253,7 +257,8 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
             timePreferenceCode: timePref.id,
             timePreferenceLabel: timePref.label,
             predictedDoctorName: predictedDoctor || undefined,
-            reason: scanReason || undefined
+            reason: scanReason || undefined,
+            detectedSymptoms: detectedSymptoms || undefined
         });
     };
 

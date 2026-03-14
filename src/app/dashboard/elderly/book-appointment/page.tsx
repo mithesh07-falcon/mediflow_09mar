@@ -181,13 +181,28 @@ export default function BookAppointmentPage() {
 
                     {/* AI Reason Banner */}
                     {doctorMatch.reason && (
-                        <div className="relative z-10 bg-primary/10 border-[6px] border-primary/20 rounded-[3rem] p-10 flex gap-8 items-center animate-in fade-in slide-in-from-bottom-5 duration-700">
-                            <div className="h-24 w-24 bg-primary text-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
-                                <Sparkles className="h-12 w-12" />
+                        <div className="relative z-10 space-y-4 animate-in fade-in slide-in-from-bottom-5 duration-700">
+                            <div className="bg-primary/10 border-[6px] border-primary/20 rounded-[3rem] p-10 flex gap-8 items-center">
+                                <div className="h-24 w-24 bg-primary text-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
+                                    <Sparkles className="h-12 w-12" />
+                                </div>
+                                <p className="text-4xl font-black text-primary leading-tight lowercase first-letter:uppercase">
+                                    &ldquo;{doctorMatch.reason}&rdquo;
+                                </p>
                             </div>
-                            <p className="text-4xl font-black text-primary leading-tight lowercase first-letter:uppercase">
-                                &ldquo;{doctorMatch.reason}&rdquo;
-                            </p>
+                            
+                            {/* Detected Symptoms Section */}
+                            {doctorMatch.detectedSymptoms && doctorMatch.detectedSymptoms.length > 0 && (
+                                <div className="bg-white border-[6px] border-slate-200 rounded-[3rem] p-8 flex flex-wrap gap-4 items-center">
+                                    <span className="text-2xl font-black text-slate-400 uppercase tracking-widest mr-4">Detected:</span>
+                                    {doctorMatch.detectedSymptoms.map((sym, idx) => (
+                                        <div key={idx} className="bg-slate-100 border-[4px] border-slate-200 text-slate-700 px-6 py-3 rounded-full text-2xl font-black flex items-center gap-2">
+                                            <Check className="h-6 w-6 text-green-500" />
+                                            {sym}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
