@@ -41,8 +41,14 @@ export default function AppointmentPage() {
 
   useEffect(() => {
     const activeUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+    const currentEmail = activeUser.email || "default";
     const savedFamily = JSON.parse(localStorage.getItem("mediflow_family_members") || "[]");
-    const members = savedFamily.length > 0 ? savedFamily : [{ id: "self", name: activeUser.firstName || "User", relation: "Self", age: activeUser.age || "30" }];
+    
+    let members = savedFamily.filter((m: any) => m.userId === currentEmail);
+    if (members.length === 0) {
+      members = [{ id: "1-" + Date.now(), name: activeUser.firstName || "User", relation: "Self", age: activeUser.age || "30", seed: "10", userId: currentEmail }];
+    }
+    
     setFamilyMembers(members);
     if (members.length > 0) setSelectedFamily(members[0].name);
 

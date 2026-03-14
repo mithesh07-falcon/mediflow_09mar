@@ -52,7 +52,12 @@ export default function MedicationSchedulePage() {
 
     const savedFamily = localStorage.getItem("mediflow_family_members");
     const familyMembers = savedFamily ? JSON.parse(savedFamily) : [];
-    const authorizedNames = familyMembers.map((m: any) => m.name.toLowerCase());
+    const currentEmail = user?.email || "default";
+    const myMembers = familyMembers.filter((m: any) => m.userId === currentEmail);
+    // If no members at all (e.g. legacy or fresh), at least allow their own prescriptions
+    const authorizedNames = myMembers.length > 0 
+      ? myMembers.map((m: any) => m.name.toLowerCase())
+      : [user?.firstName?.toLowerCase()].filter(Boolean);
 
     const saved = localStorage.getItem("mediflow_prescriptions");
     if (saved) {

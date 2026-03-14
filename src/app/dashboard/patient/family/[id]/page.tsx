@@ -91,10 +91,18 @@ export default function FamilyMemberProfilePage({
 
   useEffect(() => {
     // 1. Get Member
+    const activeUserStr = localStorage.getItem("mediflow_current_user");
+    let currentEmail = "default";
+    if (activeUserStr) {
+      const user = JSON.parse(activeUserStr);
+      currentEmail = user.email || "default";
+    }
+
     const saved = localStorage.getItem("mediflow_family_members");
     if (saved) {
       const parsedMembers = JSON.parse(saved);
-      const found = parsedMembers.find((m: any) => m.id === params.id);
+      // Ensure the member belongs to the logged-in user securely
+      const found = parsedMembers.find((m: any) => m.id === params.id && m.userId === currentEmail);
       if (found) {
         setMember(found);
       } else {

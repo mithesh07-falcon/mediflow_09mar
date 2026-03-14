@@ -47,6 +47,7 @@ interface FamilyMember {
   gender?: string;
   symptoms?: string;
   seed: string;
+  userId?: string;
 }
 
 export default function FamilyProfilesPage() {
@@ -64,43 +65,57 @@ export default function FamilyProfilesPage() {
     const activeUserStr = localStorage.getItem("mediflow_current_user");
     let currentUserName = "Member";
     let currentUserAge = "Age Not Set";
+    let currentEmail = "default";
     if (activeUserStr) {
       const user = JSON.parse(activeUserStr);
       currentUserName = user.firstName || "Member";
       currentUserAge = user.age || "Age Not Set";
+      currentEmail = user.email || "default";
     }
 
     const saved = localStorage.getItem("mediflow_family_members");
     let loadedMembers: FamilyMember[];
     if (saved) {
       const parsedMembers = JSON.parse(saved);
-      const updatedMembers = parsedMembers.map((m: FamilyMember) =>
-        m.relation === "Self"
-          ? { ...m, name: currentUserName, age: currentUserAge }
-          : m
-      );
-      loadedMembers = updatedMembers;
-      setMembers(updatedMembers);
-      localStorage.setItem(
-        "mediflow_family_members",
-        JSON.stringify(updatedMembers)
-      );
-    } else {
-      const defaults = [
-        {
-          id: "1",
+      // Filter for privacy: show only those belonging to current user
+      let userMembers = parsedMembers.filter((m: any) => m.userId === currentEmail);
+      
+      // If none found for this user, give them a default 'Self' profile
+      if (userMembers.length === 0) {
+        const defaultSelf = {
+          id: "1-" + Date.now(),
           name: currentUserName,
           relation: "Self",
           age: currentUserAge,
           seed: "10",
+          userId: currentEmail,
+        };
+        userMembers = [defaultSelf];
+        const allMembers = [...parsedMembers, defaultSelf];
+        localStorage.setItem("mediflow_family_members", JSON.stringify(allMembers));
+      } else {
+        // Update their 'Self' profile if it exists
+        userMembers = userMembers.map((m: FamilyMember) =>
+          m.relation === "Self" ? { ...m, name: currentUserName, age: currentUserAge } : m
+        );
+      }
+      
+      loadedMembers = userMembers;
+      setMembers(userMembers);
+    } else {
+      const defaults = [
+        {
+          id: "1-" + Date.now().toString(),
+          name: currentUserName,
+          relation: "Self",
+          age: currentUserAge,
+          seed: "10",
+          userId: currentEmail,
         },
       ];
       loadedMembers = defaults;
       setMembers(defaults);
-      localStorage.setItem(
-        "mediflow_family_members",
-        JSON.stringify(defaults)
-      );
+      localStorage.setItem("mediflow_family_members", JSON.stringify(defaults));
     }
 
     // Count records for each member
@@ -135,6 +150,13 @@ export default function FamilyProfilesPage() {
       return;
     }
 
+    const activeUserStr = localStorage.getItem("mediflow_current_user");
+    let currentEmail = "default";
+    if (activeUserStr) {
+      const user = JSON.parse(activeUserStr);
+      currentEmail = user.email || "default";
+    }
+
     const newMember: FamilyMember = {
       id: Date.now().toString(),
       name: newName,
@@ -143,11 +165,17 @@ export default function FamilyProfilesPage() {
       bloodGroup: newBloodGroup || undefined,
       gender: newGender || undefined,
       seed: Math.floor(Math.random() * 100).toString(),
+      userId: currentEmail,
     };
 
     const updated = [...members, newMember];
     setMembers(updated);
-    localStorage.setItem("mediflow_family_members", JSON.stringify(updated));
+    
+    // Update global list mapping
+    const saved = localStorage.getItem("mediflow_family_members");
+    const allMembers = saved ? JSON.parse(saved) : [];
+    allMembers.push(newMember);
+    localStorage.setItem("mediflow_family_members", JSON.stringify(allMembers));
     setRecordCounts((prev) => ({
       ...prev,
       [newMember.id]: { manual: 0, auto: 0 },
@@ -169,7 +197,14 @@ export default function FamilyProfilesPage() {
   const removeMember = (id: string) => {
     const updated = members.filter((m) => m.id !== id);
     setMembers(updated);
-    localStorage.setItem("mediflow_family_members", JSON.stringify(updated));
+    
+    // Update global list
+    const saved = localStorage.getItem("mediflow_family_members");
+    if (saved) {
+      const allMembers = JSON.parse(saved);
+      const updatedAll = allMembers.filter((m: any) => m.id !== id);
+      localStorage.setItem("mediflow_family_members", JSON.stringify(updatedAll));
+    }
     // Also clean up their health records
     localStorage.removeItem(`mediflow_health_records_${id}`);
     toast({

@@ -65,11 +65,21 @@ export default function PatientDashboard() {
 
     const saved = localStorage.getItem("mediflow_family_members");
     let members: FamilyMember[] = [];
+    const currentEmail = user.email || "default";
     if (saved) {
-      members = JSON.parse(saved);
+      const allMembers = JSON.parse(saved);
+      members = allMembers.filter((m: any) => m.userId === currentEmail);
+      
+      // Safety fallback if no members exist for this user yet
+      if (members.length === 0) {
+        const defaultSelf = { id: "1-" + Date.now(), name: user.firstName, relation: "Self", age: user.age || "32", seed: "10", userId: currentEmail };
+        members = [defaultSelf];
+        allMembers.push(defaultSelf);
+        localStorage.setItem("mediflow_family_members", JSON.stringify(allMembers));
+      }
       setFamilyMembers(members);
     } else {
-      const defaultSelf = [{ id: "1", name: user.firstName, relation: "Self", age: user.age || "32", seed: "10" }];
+      const defaultSelf = [{ id: "1-" + Date.now(), name: user.firstName, relation: "Self", age: user.age || "32", seed: "10", userId: currentEmail }];
       members = defaultSelf;
       setFamilyMembers(defaultSelf);
       localStorage.setItem("mediflow_family_members", JSON.stringify(defaultSelf));
