@@ -71,7 +71,8 @@ export default function RegisterPage() {
       setPhone("+91 ");
       return;
     }
-    const digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
+    let digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
+    digits = digits.replace(/^[^6-9]+/, "");
     setPhone("+91 " + digits);
   };
 
@@ -82,12 +83,35 @@ export default function RegisterPage() {
     const emailLower = email.toLowerCase();
     const phoneClean = phone.replace(/\s/g, '');
 
-    // 1. Regional Prefix Check (+91 for India) — client-side check
-    if (!phoneClean.startsWith("+91") || phoneClean.length !== 13) {
+    // CONSTRAINT 12: Email format validation
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(emailLower)) {
+      toast({ variant: "destructive", title: "Invalid Email", description: "Please enter a valid email format (e.g., example@gmail.com)." });
+      setLoading(false);
+      return;
+    }
+
+    // CONSTRAINT 11: Password strength
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      toast({ variant: "destructive", title: "Weak Password", description: "Password must be at least 8 characters with one uppercase, one lowercase, one number, and one special character." });
+      setLoading(false);
+      return;
+    }
+
+    // CONSTRAINT 4: Age validation
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum) || ageNum < 0 || ageNum > 100) {
+      toast({ variant: "destructive", title: "Invalid Age", description: "Age must be between 0 and 100." });
+      setLoading(false);
+      return;
+    }
+
+    // CONSTRAINT 2: Phone check
+    if (!phoneClean.startsWith("+91") || phoneClean.length !== 13 || !['6', '7', '8', '9'].includes(phoneClean[3])) {
       toast({
         variant: "destructive",
         title: "Invalid Phone Format",
-        description: "Please enter exactly 10 digits after the +91 prefix.",
+        description: "Please enter exactly 10 digits starting with 6, 7, 8, or 9 after the +91 prefix.",
       });
       setLoading(false);
       return;
@@ -203,7 +227,7 @@ export default function RegisterPage() {
                           required
                           className="h-12 rounded-xl"
                           value={firstName}
-                          onChange={(e) => setFirstName(e.target.value)}
+                          onChange={(e) => setFirstName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -213,7 +237,7 @@ export default function RegisterPage() {
                           required
                           className="h-12 rounded-xl"
                           value={lastName}
-                          onChange={(e) => setLastName(e.target.value)}
+                          onChange={(e) => setLastName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                         />
                       </div>
                     </div>
@@ -241,9 +265,16 @@ export default function RegisterPage() {
                             type="number"
                             placeholder="Age"
                             required
+                            min="0"
+                            max="100"
                             className="h-12 pl-10 rounded-xl"
                             value={age}
-                            onChange={(e) => setAge(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '') { setAge(''); return; }
+                              const num = parseInt(val);
+                              if (num >= 0 && num <= 100) setAge(val);
+                            }}
                           />
                         </div>
                       </div>
@@ -251,6 +282,17 @@ export default function RegisterPage() {
                     <Button
                       type="button"
                       onClick={() => {
+                        // CONSTRAINT 8: Cannot proceed without filling data fields
+                        const phoneClean = phone.replace(/\s/g, '');
+                        if (!firstName.trim() || !lastName.trim() || phoneClean.length !== 13 || !age) {
+                          toast({
+                            variant: "destructive",
+                            title: "Incomplete Fields",
+                            description: "Please fill all the data fields (Name, Phone, Age) before moving to the next page.",
+                          });
+                          return;
+                        }
+                        // CONSTRAINT 12: Email format not relevant here yet, checked at step 3
                         if (isElderly) {
                           const code = Math.floor(100000 + Math.random() * 900000).toString();
                           setGeneratedOtp(code);
@@ -328,7 +370,7 @@ export default function RegisterPage() {
                             required
                             className="h-12 rounded-xl"
                             value={guardianName}
-                            onChange={(e) => setGuardianName(e.target.value)}
+                            onChange={(e) => setGuardianName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                           />
                         </div>
                         <div className="space-y-1.5">
@@ -347,7 +389,8 @@ export default function RegisterPage() {
                                   setGuardianPhone("+91 ");
                                   return;
                                 }
-                                const digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
+                                let digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
+                                digits = digits.replace(/^[^6-9]+/, "");
                                 setGuardianPhone("+91 " + digits);
                               }}
                             />
@@ -361,7 +404,7 @@ export default function RegisterPage() {
                             required
                             className="h-12 rounded-xl"
                             value={guardianRelationship}
-                            onChange={(e) => setGuardianRelationship(e.target.value)}
+                            onChange={(e) => setGuardianRelationship(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                           />
                         </div>
                       </div>
@@ -388,7 +431,18 @@ export default function RegisterPage() {
                       <Button type="button" variant="outline" onClick={() => setStep(1)} className="h-14 flex-1 rounded-xl">
                         Back
                       </Button>
-                      <Button type="button" onClick={() => setStep(3)} className="h-14 flex-[2] text-lg font-bold rounded-xl">
+                      <Button type="button" onClick={() => {
+                        // CONSTRAINT 8: Cannot proceed without filling data fields
+                        if (!guardianName.trim() || !guardianRelationship.trim() || guardianPhone.replace(/\s/g, '').length !== 13) {
+                          toast({
+                            variant: "destructive",
+                            title: "Incomplete Fields",
+                            description: "Please fill all guardian details (Name, Phone, Relationship) before moving to the next page.",
+                          });
+                          return;
+                        }
+                        setStep(3);
+                      }} className="h-14 flex-[2] text-lg font-bold rounded-xl">
                         Next Step <ArrowRight className="ml-2 h-5 w-5" />
                       </Button>
                     </div>
@@ -450,6 +504,10 @@ export default function RegisterPage() {
                             <span className={`text-[11px] font-bold ${/[0-9]/.test(password) ? 'text-green-600' : 'text-muted-foreground'}`}>Contains a number</span>
                           </div>
                           <div className="flex items-center gap-2">
+                            <div className={`h-1.5 w-1.5 rounded-full ${/[A-Z]/.test(password) && /[a-z]/.test(password) ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-slate-300'}`} />
+                            <span className={`text-[11px] font-bold ${/[A-Z]/.test(password) && /[a-z]/.test(password) ? 'text-green-600' : 'text-muted-foreground'}`}>Upper & Lowercase</span>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <div className={`h-1.5 w-1.5 rounded-full ${/[!@#$%^&*(),.?":{}|<>]/.test(password) ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-slate-300'}`} />
                             <span className={`text-[11px] font-bold ${/[!@#$%^&*(),.?":{}|<>]/.test(password) ? 'text-green-600' : 'text-muted-foreground'}`}>Special character (!@#$%^&*)</span>
                           </div>
@@ -463,7 +521,7 @@ export default function RegisterPage() {
                       <Button
                         type="submit"
                         className="h-14 flex-[2] text-lg font-bold rounded-xl shadow-lg shadow-primary/20"
-                        disabled={loading || !!emailError || password.length < 8 || !/[0-9]/.test(password) || !/[!@#$%^&*(),.?":{}|<>]/.test(password)}
+                        disabled={loading || !!emailError || password.length < 8 || !/[0-9]/.test(password) || !/[!@#$%^&*(),.?":{}|<>]/.test(password) || !/[A-Z]/.test(password) || !/[a-z]/.test(password)}
                       >
                         {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Complete Registration"}
                       </Button>

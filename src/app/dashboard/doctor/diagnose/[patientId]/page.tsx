@@ -162,20 +162,43 @@ export default function DiagnosisPage() {
          const savedPrescriptions = JSON.parse(localStorage.getItem("mediflow_prescriptions") || "[]");
          const doctorUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
 
+         // CONSTRAINT 17 & 18: Prescription with editing window and permanent storage
          const newPrescription = {
             id: `RX-${Date.now()}`,
             patientId,
             patientName: patientInfo?.name || "Unknown",
             date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+            submittedAt: new Date().toISOString(), // CONSTRAINT 17: Track time for 10-min edit window
+            isFinalized: false, // Will become true after 10 minutes
             doctorEmail: doctorUser.email,
             doctorName: doctorUser.firstName,
+            doctorSpecialization: doctorUser.specialization || "General",
             notes: diagnosisNote,
+            diagnosisDescription: diagnosisNote, // CONSTRAINT 18: Store full description
             medications: meds,
             sentToPharmacy: sendToPharmacy,
-            consentCaptured: patientConsent
+            consentCaptured: patientConsent,
+            isPermanent: true, // CONSTRAINT 18: Cannot be deleted by normal users
          };
 
          localStorage.setItem("mediflow_prescriptions", JSON.stringify([newPrescription, ...savedPrescriptions]));
+
+         // CONSTRAINT 18: Also store in permanent medical history
+         const medHistory = JSON.parse(localStorage.getItem("mediflow_medical_history") || "[]");
+         medHistory.push({
+            prescriptionId: newPrescription.id,
+            patientId,
+            patientName: patientInfo?.name,
+            diagnosisDescription: diagnosisNote,
+            prescribedMedicines: meds.map(m => ({ name: m.name, dosage: m.dosage, frequency: m.frequency, duration: m.duration })),
+            dateTime: new Date().toISOString(),
+            doctorName: doctorUser.firstName,
+            doctorEmail: doctorUser.email,
+            doctorSpecialization: doctorUser.specialization || "General",
+            isPermanent: true,
+         });
+         localStorage.setItem("mediflow_medical_history", JSON.stringify(medHistory));
 
          // ── DATA INTEGRITY: Mark appointment as Completed ──────────────────
          // 1. Update localStorage so doctor queue + patient schedule both reflect it

@@ -110,6 +110,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Data Manipulation Blocked. Cannot book for another user." }, { status: 403 });
         }
 
+        // Constraint 9 & 15: Same doctor cannot have two appointments at the same time
+        const isConflict = appointments.some((a: any) => 
+            a.doctorEmail === appointment.doctorEmail && 
+            a.date === appointment.date && 
+            a.time === appointment.time &&
+            a.status !== "Cancelled"
+        );
+
+        if (isConflict) {
+            return NextResponse.json({ error: "Doctor already has an appointment booked for this time." }, { status: 409 });
+        }
+
         const synchronizedAppt = {
             ...appointment,
             id: Date.now(), // Generate server-side secure ID

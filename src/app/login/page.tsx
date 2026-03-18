@@ -83,6 +83,10 @@ export default function LoginPage() {
           firstName: doc.name,
           specialization: doc.specialization,
         }));
+        // CONSTRAINT 16: Set active session
+        localStorage.setItem("mediflow_active_session", JSON.stringify({
+          email: doc.email, role: 'doctor', sessionId: `${doc.email}_${Date.now()}`, timestamp: Date.now()
+        }));
 
         setLoading(false);
         toast({
@@ -129,6 +133,10 @@ export default function LoginPage() {
         }
 
         localStorage.setItem("mediflow_current_user", JSON.stringify({ ...patient, role: 'patient' }));
+        // CONSTRAINT 16: Set active session
+        localStorage.setItem("mediflow_active_session", JSON.stringify({
+          email: patient.email, role: 'patient', sessionId: `${patient.email}_${Date.now()}`, timestamp: Date.now()
+        }));
 
         setLoading(false);
         toast({ title: "Access Granted", description: `Welcome back, ${patient.firstName}!` });

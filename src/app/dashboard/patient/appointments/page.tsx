@@ -38,6 +38,8 @@ export default function AppointmentPage() {
   const [checkingSlots, setCheckingSlots] = useState(false);
   const [symptomsDesc, setSymptomsDesc] = useState("");
   const [recommendedSpec, setRecommendedSpec] = useState<string | null>(null);
+  const [agreeVariation, setAgreeVariation] = useState(false);
+  const [waitlistedSlots, setWaitlistedSlots] = useState<string[]>([]);
 
   useEffect(() => {
     const activeUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
@@ -163,6 +165,17 @@ export default function AppointmentPage() {
       const rawSlots: string[] = allMaster[`${selectedDoctor}_${dateStr}`] ||
         ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM", "04:00 PM"];
 
+      // CONSTRAINT 14: Only allow slots within working hours (9 AM – 6 PM)
+      const workingHoursSlots = rawSlots.filter(slot => {
+        const match = slot.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return false;
+        let hours = parseInt(match[1], 10);
+        const ampm = match[3].toUpperCase();
+        if (ampm === "PM" && hours !== 12) hours += 12;
+        if (ampm === "AM" && hours === 12) hours = 0;
+        return hours >= 9 && hours < 18; // 9 AM to 6 PM
+      });
+
       // ── TIME-AWARE SLOT FILTER (LOCAL TIMEZONE) ──────────────────────────
       // Build today's local date string the same timezone-safe way
       const now = new Date();
@@ -172,10 +185,10 @@ export default function AppointmentPage() {
       const todayStr = `${todayYear}-${todayMonth}-${todayDay}`;
 
       const isToday = dateStr === todayStr;
-      let availableSlots = rawSlots;
+      let availableSlots = workingHoursSlots;
 
       if (isToday) {
-        availableSlots = rawSlots.filter(slot => {
+        availableSlots = workingHoursSlots.filter(slot => {
           // Parse "09:00 AM" or "02:00 PM"
           const match = slot.match(/(\d+):(\d+)\s*(AM|PM)/i);
           if (!match) return true;
@@ -291,24 +304,65 @@ export default function AppointmentPage() {
                   ) : (
                     <div className="grid grid-cols-2 gap-4">
                       {masterSlots.map(slot => (
-                        <Button
-                          key={slot}
-                          variant={selectedSlot === slot ? "default" : "outline"}
-                          disabled={bookedSlots.includes(slot)}
-                          className={`h-14 rounded-2xl ${selectedSlot === slot ? 'shadow-lg shadow-primary/20 scale-[1.02]' : ''} transition-all`}
-                          onClick={() => setSelectedSlot(slot)}
-                        >
-                          {slot} {bookedSlots.includes(slot) && "(Booked)"}
-                        </Button>
+                        <div key={slot} className="flex flex-col gap-1">
+                          <Button
+                            variant={selectedSlot === slot ? "default" : "outline"}
+                            disabled={bookedSlots.includes(slot)}
+                            className={`h-14 rounded-2xl ${selectedSlot === slot ? 'shadow-lg shadow-primary/20 scale-[1.02]' : ''} transition-all`}
+                            onClick={() => setSelectedSlot(slot)}
+                          >
+                            {slot} {bookedSlots.includes(slot) && !waitlistedSlots.includes(slot) && "(Booked)"}
+                            {waitlistedSlots.includes(slot) && " ✓ Waitlisted"}
+                          </Button>
+                          {bookedSlots.includes(slot) && !waitlistedSlots.includes(slot) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-[10px] h-6 text-primary font-bold uppercase tracking-widest"
+                              onClick={() => {
+                                const activeUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+                                const waitlist = JSON.parse(localStorage.getItem("mediflow_waitlist") || "[]");
+                                const displayDate = date!.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                waitlist.push({
+                                  patientEmail: activeUser.email,
+                                  patientName: selectedFamily,
+                                  doctorEmail: selectedDoctor,
+                                  date: displayDate,
+                                  slot,
+                                  addedAt: new Date().toISOString(),
+                                });
+                                localStorage.setItem("mediflow_waitlist", JSON.stringify(waitlist));
+                                setWaitlistedSlots([...waitlistedSlots, slot]);
+                                toast({ title: "Waitlisted!", description: `You'll be notified if ${slot} becomes available.` });
+                              }}
+                            >
+                              Join Waitlist
+                            </Button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
                 </div>
 
+                <div className="flex items-start space-x-3 mt-4 bg-yellow-50/50 p-4 rounded-xl border border-yellow-200">
+                  <input type="checkbox" id="variation-agree" className="mt-1 h-5 w-5 accent-primary cursor-pointer" checked={agreeVariation} onChange={e => setAgreeVariation(e.target.checked)} />
+                  <Label htmlFor="variation-agree" className="text-xs font-bold leading-tight cursor-pointer text-slate-600">
+                    I agree that the appointment time may vary up to 10 minutes before or after the scheduled time.
+                  </Label>
+                </div>
+
+                {/* CONSTRAINT 20: Cancellation & No-Refund Policy */}
+                <div className="mt-3 p-3 bg-red-50/50 rounded-xl border border-red-200">
+                  <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest">
+                    Cancellation Policy: Cancelled slots are offered to waitlisted patients first. No refunds on confirmed bookings.
+                  </p>
+                </div>
+
                 <Button
                   className="w-full h-20 text-2xl font-bold rounded-3xl shadow-xl shadow-primary/20 mt-8 bg-primary hover:bg-primary/90 transition-all active:scale-95"
                   onClick={handleBook}
-                  disabled={!selectedSlot}
+                  disabled={!selectedSlot || !agreeVariation}
                 >
                   Proceed to Payment
                 </Button>

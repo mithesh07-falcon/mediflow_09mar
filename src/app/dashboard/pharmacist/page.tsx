@@ -30,9 +30,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MOCK_MEDICINES } from "./mockData";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 
 export default function PharmacistDashboard() {
   const { toast } = useToast();
+  // CONSTRAINT 10: Only pharmacists can access this portal
+  useRoleGuard("pharmacist");
   const [rxId, setRxId] = useState("");
   const [fetching, setFetching] = useState(false);
   const [activeOrder, setActiveOrder] = useState<any>(null);

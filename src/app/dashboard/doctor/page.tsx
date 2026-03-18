@@ -22,6 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Textarea } from "@/components/ui/textarea";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 
 // ─── Confirmation Dialog Component ──────────────────────────────────────────
 function ConfirmDialog({
@@ -189,6 +190,8 @@ function AttendanceControl({
 export default function DoctorDashboard() {
   const { toast } = useToast();
   const router = useRouter();
+  // CONSTRAINT 10: Only doctors can access this portal
+  useRoleGuard("doctor");
   const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [doctorInfo, setDoctorInfo] = useState<any>(null);

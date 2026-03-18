@@ -37,6 +37,7 @@ import {
   Stethoscope
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 
 const TIME_SLOTS_PRESET = [
   "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
@@ -47,6 +48,8 @@ const TIME_SLOTS_PRESET = [
 
 export default function FormalAdminDashboard() {
   const { toast } = useToast();
+  // CONSTRAINT 10: Only admins can access this portal
+  useRoleGuard("admin");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -212,13 +215,32 @@ export default function FormalAdminDashboard() {
       setNewStaff({ ...newStaff, phone: "+91 " });
       return;
     }
-    const digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
+    let digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
+    digits = digits.replace(/^[^6-9]+/, "");
     setNewStaff({ ...newStaff, phone: "+91 " + digits });
   };
 
   const handleOnboardStaff = async () => {
-    if (!newStaff.email || !newStaff.password || newStaff.phone.replace(/\s/g, '').length !== 13) {
-      toast({ variant: "destructive", title: "Missing Information", description: "Email, Password and a valid 10-digit Phone number are required." });
+    const cleanPhone = newStaff.phone.replace(/\s/g, '');
+    // CONSTRAINT 7: Name must be letters only
+    if (!newStaff.name.trim() || /[^a-zA-Z\s.]/.test(newStaff.name)) {
+      toast({ variant: "destructive", title: "Invalid Name", description: "Name must contain only letters, spaces, and periods." });
+      return;
+    }
+    // CONSTRAINT 12: Email format
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(newStaff.email)) {
+      toast({ variant: "destructive", title: "Invalid Email", description: "Please enter a valid email format (e.g., example@gmail.com)." });
+      return;
+    }
+    // CONSTRAINT 2: Phone validation
+    if (cleanPhone.length !== 13 || !['6', '7', '8', '9'].includes(cleanPhone[3])) {
+      toast({ variant: "destructive", title: "Invalid Phone", description: "Phone number must be 10 digits starting with 6, 7, 8, or 9." });
+      return;
+    }
+    // CONSTRAINT 11: Password strength
+    if (newStaff.password.length < 8 || !/[A-Z]/.test(newStaff.password) || !/[a-z]/.test(newStaff.password) || !/[0-9]/.test(newStaff.password) || !/[!@#$%^&*]/.test(newStaff.password)) {
+      toast({ variant: "destructive", title: "Weak Password", description: "Password must have at least 8 characters with uppercase, lowercase, number, and special character." });
       return;
     }
     setLoading(true);
@@ -503,7 +525,7 @@ export default function FormalAdminDashboard() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Full Name</Label>
-                    <Input value={newStaff.name} onChange={e => setNewStaff({ ...newStaff, name: e.target.value })} placeholder="Dr. Sarah Johnson" className="h-14 rounded-2xl border-2 font-bold" />
+                    <Input value={newStaff.name} onChange={e => setNewStaff({ ...newStaff, name: e.target.value.replace(/[^a-zA-Z\s.]/g, '') })} placeholder="Dr. Sarah Johnson" className="h-14 rounded-2xl border-2 font-bold" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Official ID (Email)</Label>
@@ -549,6 +571,10 @@ export default function FormalAdminDashboard() {
                       <span className={`text-[10px] font-bold ${/[0-9]/.test(newStaff.password) ? 'text-green-700' : 'text-slate-400'}`}>One Number</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      <div className={`h-1.5 w-1.5 rounded-full ${/[A-Z]/.test(newStaff.password) && /[a-z]/.test(newStaff.password) ? 'bg-green-500' : 'bg-slate-300'}`} />
+                      <span className={`text-[10px] font-bold ${/[A-Z]/.test(newStaff.password) && /[a-z]/.test(newStaff.password) ? 'text-green-700' : 'text-slate-400'}`}>Upper & Lowercase</span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <div className={`h-1.5 w-1.5 rounded-full ${/[!@#$%^&*]/.test(newStaff.password) ? 'bg-green-500' : 'bg-slate-300'}`} />
                       <span className={`text-[10px] font-bold ${/[!@#$%^&*]/.test(newStaff.password) ? 'text-green-700' : 'text-slate-400'}`}>One Special Char</span>
                     </div>
@@ -575,7 +601,7 @@ export default function FormalAdminDashboard() {
                   <Button
                     className="w-full h-16 rounded-[2rem] bg-zinc-900 text-lg font-black tracking-tighter shadow-2xl shadow-zinc-200 mt-4"
                     onClick={handleOnboardStaff}
-                    disabled={loading || !!emailError || newStaff.password.length < 8 || !/[0-9]/.test(newStaff.password) || !/[!@#$%^&*]/.test(newStaff.password)}
+                    disabled={loading || !!emailError || newStaff.password.length < 8 || !/[0-9]/.test(newStaff.password) || !/[!@#$%^&*]/.test(newStaff.password) || !/[A-Z]/.test(newStaff.password) || !/[a-z]/.test(newStaff.password)}
                   >
                     {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : "GENERATE & SYNC CREDS"}
                   </Button>

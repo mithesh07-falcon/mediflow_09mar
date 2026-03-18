@@ -16,13 +16,29 @@ export async function POST(request: Request) {
     try {
         const { name, email, password, role, specialization, license, phone } = await request.json();
 
-        if (!name || !email || !password || !phone) {
-            return NextResponse.json({ error: "Missing required fields (Name, Email, Password, Phone)." }, { status: 400 });
+        const cleanPhone = phone ? phone.replace(/\s/g, '') : '';
+        if (!name || !email || !password || !cleanPhone || cleanPhone.length !== 13 || !['6', '7', '8', '9'].includes(cleanPhone[3])) {
+            return NextResponse.json({ error: "Missing required fields or invalid phone format (must be 10 digits starting with 6, 7, 8, or 9)." }, { status: 400 });
         }
 
-        const emailLower = email.toLowerCase();
+        // CONSTRAINT 12: Email format
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailRegex.test(email.toLowerCase())) {
+            return NextResponse.json({ error: "Invalid email format. Use format like example@gmail.com." }, { status: 400 });
+        }
+
+        // CONSTRAINT 11: Password strength
+        if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[!@#$%^&*]/.test(password)) {
+            return NextResponse.json({ error: "Password must have at least 8 characters with uppercase, lowercase, number, and special character." }, { status: 400 });
+        }
+
+        // CONSTRAINT 7: Name validation
+        if (/[^a-zA-Z\s.]/.test(name)) {
+            return NextResponse.json({ error: "Name must contain only letters, spaces, and periods." }, { status: 400 });
+        }
 
         // Check local staff registry
+        const emailLower = email.toLowerCase();
         const staff = getSafeRegistry();
         const existsInStaff = staff.some(s => s.email.toLowerCase() === emailLower);
 

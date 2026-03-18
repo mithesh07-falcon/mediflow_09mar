@@ -200,18 +200,40 @@ export async function POST(request: Request) {
 
             const emailLower = email.toLowerCase();
 
+            // CONSTRAINT 12: Email format validation
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailRegex.test(emailLower)) {
+                return NextResponse.json({ error: "Invalid email format. Please use a valid format like example@gmail.com." }, { status: 400 });
+            }
+
+            // CONSTRAINT 11: Password strength
+            if (!password || password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+                return NextResponse.json({ error: "Password must contain at least 8 characters with one uppercase, one lowercase, one number, and one special character." }, { status: 400 });
+            }
+
+            // CONSTRAINT 4: Age validation
+            const ageNum = parseInt(age);
+            if (isNaN(ageNum) || ageNum < 0 || ageNum > 100) {
+                return NextResponse.json({ error: "Age must be between 0 and 100." }, { status: 400 });
+            }
+
+            // CONSTRAINT 7: Name validation
+            if (/[^a-zA-Z\s]/.test(firstName) || /[^a-zA-Z\s]/.test(lastName)) {
+                return NextResponse.json({ error: "Name must contain only letters and spaces." }, { status: 400 });
+            }
+
             // Fix phone prefix bug: Only prepend +91 if it's missing
             let phoneClean = phone.replace(/\s/g, "");
             if (!phoneClean.startsWith("+")) {
                 phoneClean = "+91" + (phoneClean.startsWith("91") && phoneClean.length === 12 ? phoneClean.slice(2) : phoneClean);
             }
             // Ensure exactly 10 digits after +91 or similar
-            if (!phoneClean.startsWith("+91") || phoneClean.length < 13) {
+            if (!phoneClean.startsWith("+91") || phoneClean.length < 13 || !['6', '7', '8', '9'].includes(phoneClean[3])) {
                 console.warn(`[API:Patients:Register] Invalid phone: ${phoneClean}`);
                 return NextResponse.json(
                     {
                         error:
-                            "Patient phone numbers must follow the Indian clinical format starting with +91 followed by 10 digits.",
+                            "Patient phone numbers must follow the Indian clinical format starting with +91 followed by 10 digits. The first digit of the number must be 6, 7, 8, or 9.",
                     },
                     { status: 400 }
                 );

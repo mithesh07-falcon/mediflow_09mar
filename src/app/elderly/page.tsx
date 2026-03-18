@@ -105,8 +105,14 @@ export default function SeniorCareLoginPage() {
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (phoneNumber.length !== 10) {
-      toast({ variant: "destructive", title: "Invalid Phone", description: "Please enter exactly 10 digits." });
+    if (phoneNumber.length !== 10 || !['6', '7', '8', '9'].includes(phoneNumber[0])) {
+      toast({ variant: "destructive", title: "Invalid Phone", description: "Please enter exactly 10 digits starting with 6, 7, 8, or 9." });
+      return;
+    }
+
+    // CONSTRAINT 8: Cannot proceed without filling required fields
+    if (mode === "signup" && !elderName.trim()) {
+      toast({ variant: "destructive", title: "Name Required", description: "Please fill in your name before proceeding." });
       return;
     }
 
@@ -302,7 +308,11 @@ export default function SeniorCareLoginPage() {
                           placeholder="0000000000"
                           type="tel"
                           value={phoneNumber}
-                          onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                          onChange={e => {
+                            let val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                            val = val.replace(/^[^6-9]+/, "");
+                            setPhoneNumber(val);
+                          }}
                           required
                         />
                       </div>
@@ -318,7 +328,7 @@ export default function SeniorCareLoginPage() {
                             className="h-20 text-4xl px-8 rounded-3xl border-4 border-black font-bold"
                             placeholder="Full Name"
                             value={elderName}
-                            onChange={e => setElderName(e.target.value)}
+                            onChange={e => setElderName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                             required
                           />
                         </div>
@@ -380,8 +390,15 @@ export default function SeniorCareLoginPage() {
                             className="h-20 text-4xl px-8 rounded-3xl border-4 border-black font-bold"
                             placeholder="Age"
                             type="number"
+                            min="0"
+                            max="100"
                             value={age}
-                            onChange={e => setAge(e.target.value)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '') { setAge(''); return; }
+                              const num = parseInt(val);
+                              if (num >= 0 && num <= 100) setAge(val);
+                            }}
                             required
                           />
                         </div>
