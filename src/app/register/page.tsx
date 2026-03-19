@@ -26,6 +26,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [ageError, setAgeError] = useState("");
 
   // OTP for Elderly
   const [showOtpPopup, setShowOtpPopup] = useState(false);
@@ -38,6 +40,7 @@ export default function RegisterPage() {
   const [guardianName, setGuardianName] = useState("");
   const [guardianRelationship, setGuardianRelationship] = useState("");
   const [guardianPhone, setGuardianPhone] = useState("+91 ");
+  const [guardianPhoneError, setGuardianPhoneError] = useState("");
   const [selectedLanguage, setSelectedLanguage] = useState("English");
 
   const languages = [
@@ -72,8 +75,15 @@ export default function RegisterPage() {
       return;
     }
     let digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
-    digits = digits.replace(/^[^6-9]+/, "");
     setPhone("+91 " + digits);
+
+    if (digits.length > 0 && !/^[6-9]/.test(digits)) {
+      setPhoneError("Phone number must start with 6, 7, 8, or 9");
+    } else if (digits.length > 0 && digits.length !== 10) {
+      setPhoneError("Phone number must be exactly 10 digits");
+    } else {
+      setPhoneError("");
+    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -250,12 +260,16 @@ export default function RegisterPage() {
                             type="tel"
                             placeholder="+91 00000 00000"
                             required
-                            className="h-12 pl-10 rounded-xl font-bold"
+                            className={`h-12 pl-10 rounded-xl font-bold ${phoneError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                             value={phone}
                             onChange={(e) => handlePhoneInput(e.target.value)}
                           />
                         </div>
-                        <p className="text-[10px] text-muted-foreground italic pl-1">Format: +91 10-digits</p>
+                        {phoneError ? (
+                          <p className="text-[10px] text-red-500 font-bold italic pl-1">{phoneError}</p>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground italic pl-1">Format: +91 10-digits</p>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <Label>Age</Label>
@@ -265,18 +279,25 @@ export default function RegisterPage() {
                             type="number"
                             placeholder="Age"
                             required
-                            min="0"
-                            max="100"
-                            className="h-12 pl-10 rounded-xl"
+                            className={`h-12 pl-10 rounded-xl ${ageError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                             value={age}
                             onChange={(e) => {
                               const val = e.target.value;
-                              if (val === '') { setAge(''); return; }
-                              const num = parseInt(val);
-                              if (num >= 0 && num <= 100) setAge(val);
+                              setAge(val);
+                              if (val !== '') {
+                                const num = parseInt(val);
+                                if (num < 0 || num > 100) {
+                                  setAgeError("Age is not acceptable. Enter a valid age.");
+                                } else {
+                                  setAgeError("");
+                                }
+                              } else {
+                                setAgeError("");
+                              }
                             }}
                           />
                         </div>
+                        {ageError && <p className="text-[10px] text-red-500 font-bold italic pl-1">{ageError}</p>}
                       </div>
                     </div>
                     <Button
@@ -289,6 +310,14 @@ export default function RegisterPage() {
                             variant: "destructive",
                             title: "Incomplete Fields",
                             description: "Please fill all the data fields (Name, Phone, Age) before moving to the next page.",
+                          });
+                          return;
+                        }
+                        if (phoneError || ageError) {
+                          toast({
+                            variant: "destructive",
+                            title: "Invalid Input",
+                            description: "Please enter a valid format for phone number and age.",
                           });
                           return;
                         }
@@ -381,7 +410,7 @@ export default function RegisterPage() {
                               type="tel"
                               placeholder="+91 00000 00000"
                               required
-                              className="h-12 pl-10 rounded-xl font-bold"
+                              className={`h-12 pl-10 rounded-xl font-bold ${guardianPhoneError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                               value={guardianPhone}
                               onChange={(e) => {
                                 const val = e.target.value;
@@ -390,12 +419,23 @@ export default function RegisterPage() {
                                   return;
                                 }
                                 let digits = val.slice(3).replace(/\D/g, "").slice(0, 10);
-                                digits = digits.replace(/^[^6-9]+/, "");
                                 setGuardianPhone("+91 " + digits);
+                                
+                                if (digits.length > 0 && !/^[6-9]/.test(digits)) {
+                                  setGuardianPhoneError("Phone number must start with 6, 7, 8, or 9");
+                                } else if (digits.length > 0 && digits.length !== 10) {
+                                  setGuardianPhoneError("Phone number must be exactly 10 digits");
+                                } else {
+                                  setGuardianPhoneError("");
+                                }
                               }}
                             />
                           </div>
-                          <p className="text-[10px] text-red-500 font-bold italic pl-1">CRITICAL: This number will be used for SOS emergency alerts.</p>
+                          {guardianPhoneError ? (
+                            <p className="text-[10px] text-red-500 font-bold italic pl-1">{guardianPhoneError}</p>
+                          ) : (
+                            <p className="text-[10px] text-red-500 font-bold italic pl-1">CRITICAL: This number will be used for SOS emergency alerts.</p>
+                          )}
                         </div>
                         <div className="space-y-1.5">
                           <Label>Relationship / Reason</Label>
@@ -438,6 +478,14 @@ export default function RegisterPage() {
                             variant: "destructive",
                             title: "Incomplete Fields",
                             description: "Please fill all guardian details (Name, Phone, Relationship) before moving to the next page.",
+                          });
+                          return;
+                        }
+                        if (guardianPhoneError) {
+                          toast({
+                            variant: "destructive",
+                            title: "Invalid Guardian Phone",
+                            description: "Please enter a valid phone number starting with 6, 7, 8, or 9.",
                           });
                           return;
                         }

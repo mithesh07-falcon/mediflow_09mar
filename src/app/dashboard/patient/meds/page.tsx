@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import {
   Pill,
   Clock,
@@ -42,6 +43,7 @@ export default function MedicationSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [guardianContact, setGuardianContact] = useState<string | null>(null);
   const [expandedRx, setExpandedRx] = useState<string | null>(null);
+  const [notificationFrequency, setNotificationFrequency] = useState(5);
 
   const fetchPrescriptions = useCallback(() => {
     const userStr = localStorage.getItem("mediflow_current_user");
@@ -322,6 +324,27 @@ export default function MedicationSchedulePage() {
                     <span className="text-xs font-bold uppercase tracking-widest text-slate-700">Active Monitoring</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground italic text-center px-4">System polls every 10 seconds for dose compliance.</p>
+                </div>
+
+                <div className="space-y-4 pt-6 border-t">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Message Frequency</label>
+                    <Badge variant="outline" className="font-bold border-primary/20 text-primary">{notificationFrequency} / Day</Badge>
+                  </div>
+                  <div className="p-6 bg-slate-50 rounded-[2rem] border flex flex-col gap-6">
+                    <Slider 
+                      defaultValue={[notificationFrequency]} 
+                      max={20} 
+                      min={1} 
+                      step={1} 
+                      onValueChange={(val) => setNotificationFrequency(val[0])}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase">
+                      <span>1</span>
+                      <span>Max 20</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-8 border-t">
