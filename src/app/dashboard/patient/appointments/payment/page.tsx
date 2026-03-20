@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { GlobalSync } from "@/lib/sync-service";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,9 @@ export default function AppointmentPaymentPage() {
          // Local cache for UI consistency
          localStorage.setItem("mediflow_appointments", JSON.stringify([newAppt, ...savedAppts]));
          localStorage.removeItem("mediflow_pending_payment");
+
+         // --- GLOBAL CLOUD SYNC ---
+         GlobalSync.pushAppointments();
 
          // SERVER-SIDE SYNC: Send to Doctor Registry securely
          try {

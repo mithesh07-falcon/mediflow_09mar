@@ -1,5 +1,6 @@
 "use client";
 
+import { GlobalSync } from "@/lib/sync-service";
 import { useState, useEffect } from "react";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -198,7 +199,10 @@ export default function DoctorDashboard() {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [attendance, setAttendance] = useState<{status: string, loginTime: string, screenTimeStr: string} | null>(null);
 
-  const fetchAppts = (user: any) => {
+  const fetchAppts = async (user: any) => {
+    // --- GLOBAL CLOUD SYNC ---
+    await GlobalSync.pullAppointments();
+    
     const savedAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
     const todayStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const myAppts = savedAppts.filter(
@@ -261,6 +265,9 @@ export default function DoctorDashboard() {
         String(a.id) === String(id) ? { ...a, status: newStatus } : a
       );
       localStorage.setItem("mediflow_appointments", JSON.stringify(updated));
+      
+      // --- GLOBAL CLOUD SYNC ---
+      GlobalSync.pushAppointments();
 
       // Refresh local state immediately
       const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");

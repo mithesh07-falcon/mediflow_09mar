@@ -1,6 +1,7 @@
 
 "use client";
 
+import { GlobalSync } from "@/lib/sync-service";
 import { useEffect, useState } from "react";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { AIDoctorRecommender } from "@/components/patient/AIDoctorRecommender";
@@ -47,6 +48,13 @@ export default function PatientDashboard() {
   const [userProfile, setUserProfile] = useState<any>(null);
 
   useEffect(() => {
+    // --- GLOBAL CLOUD SYNC ---
+    const runSync = async () => {
+       await GlobalSync.pullAppointments();
+       await GlobalSync.pullMedicalData();
+    };
+    runSync();
+
     const activeUserStr = localStorage.getItem("mediflow_current_user");
     if (!activeUserStr) {
       router.push("/");

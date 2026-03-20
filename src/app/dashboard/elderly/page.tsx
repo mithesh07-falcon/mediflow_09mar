@@ -1,6 +1,7 @@
 
 "use client";
 
+import { GlobalSync } from "@/lib/sync-service";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -278,6 +279,14 @@ export default function ElderlyDashboard() {
         language: savedUser.language || "English"
       });
     }
+
+    // --- GLOBAL CLOUD SYNC ---
+    const runSync = async () => {
+       await GlobalSync.pullAppointments();
+       await GlobalSync.pullMedicalData();
+       await GlobalSync.pullStaff(); // Ensure staff names are available for doctor matching
+    };
+    runSync();
   }, [router]);
 
 

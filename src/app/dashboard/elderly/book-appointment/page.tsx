@@ -112,6 +112,33 @@ export default function BookAppointmentPage() {
         setLoading(true);
         // Simulate API booking step
         setTimeout(() => {
+            const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+            const savedAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
+            
+            const doctorName = getDoctorForSpecialist(doctorMatch?.specialist || "", doctorMatch?.predictedDoctorName);
+            // We need the doctor email for the doctor dashboard to filter
+            // Let's assume the name mapping is consistent or match by name
+            const allStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+            const doctorObj = allStaff.find((s: any) => s.name === doctorName);
+
+            const newAppt = {
+                id: Date.now(),
+                patient: user.firstName + " " + user.lastName,
+                patientEmail: user.email,
+                doctor: doctorName,
+                doctorEmail: doctorObj?.email || "internal-matching@mediflow.com",
+                date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+                time: doctorMatch?.timePreferenceLabel || "09:00 AM",
+                status: "Confirmed",
+                type: "Elderly",
+                symptoms: doctorMatch?.reason || "General Checkup"
+            };
+
+            localStorage.setItem("mediflow_appointments", JSON.stringify([newAppt, ...savedAppts]));
+            
+            // --- GLOBAL CLOUD SYNC ---
+            GlobalSync.pushAppointments();
+
             setLoading(false);
             setSuccess(true);
             // Wait a few seconds, then take them back to dashboard

@@ -2,6 +2,7 @@
 
 import { addDays, format } from "date-fns";
 
+import { GlobalSync } from "@/lib/sync-service";
 import { useState, useEffect } from "react";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -199,14 +200,17 @@ export default function DiagnosisPage() {
             isPermanent: true,
          });
          localStorage.setItem("mediflow_medical_history", JSON.stringify(medHistory));
-
+         
          // ── DATA INTEGRITY: Mark appointment as Completed ──────────────────
-         // 1. Update localStorage so doctor queue + patient schedule both reflect it
          const savedAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
          const updatedAppts = savedAppts.map((a: any) =>
             String(a.id) === String(patientId) ? { ...a, status: "Completed", prescriptionId: newPrescription.id } : a
          );
          localStorage.setItem("mediflow_appointments", JSON.stringify(updatedAppts));
+
+         // --- GLOBAL CLOUD SYNC ---
+         GlobalSync.pushMedicalData();
+         GlobalSync.pushAppointments();
 
          // 2. Sync to server-side appointments.json
          try {
