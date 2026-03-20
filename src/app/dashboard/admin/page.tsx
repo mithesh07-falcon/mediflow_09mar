@@ -96,6 +96,8 @@ export default function FormalAdminDashboard() {
       const data = await res.json();
       if (data.exists) {
         setEmailError(`Existing Account (Global): ${data.data?.name || "User"} (${data.data?.role || "Staff"}). Duplicate blocked.`);
+      } else if (!val.toLowerCase().endsWith("@mediflow.com")) {
+        setEmailError("invalid type: Staff registry strictly restricted to @mediflow.com domains.");
       } else {
         setEmailError("");
       }
@@ -248,7 +250,7 @@ export default function FormalAdminDashboard() {
     if (!newStaff.email.toLowerCase().endsWith("@mediflow.com")) {
       toast({ 
         variant: "destructive", 
-        title: "Invalid Domain", 
+        title: "invalid type", 
         description: "Official staff access restricted to @mediflow.com domains only. Gmail/Outlook accounts are for patients." 
       });
       return;
@@ -581,7 +583,7 @@ export default function FormalAdminDashboard() {
                       value={newStaff.email}
                       onBlur={() => {
                         if (newStaff.email && !newStaff.email.toLowerCase().endsWith("@mediflow.com")) {
-                           toast({ variant: "destructive", title: "Invalid Domain", description: "All staff IDs MUST end in @mediflow.com. Gmail/Other domains are for patients only." });
+                           toast({ variant: "destructive", title: "invalid type", description: "All staff IDs MUST end in @mediflow.com. Gmail/Other domains are for patients only." });
                         }
                       }}
                       onChange={e => {

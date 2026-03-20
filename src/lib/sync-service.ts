@@ -7,8 +7,8 @@
  */
 
 // Global registry codes (hidden from casual users but accessible for sync)
-const STAFF_URL = "https://rentry.co/api/edit/67d5fuuw2";
-const PATIENT_URL = "https://rentry.co/api/edit/eq88fggb7";
+const STAFF_URL = "https://rentry.co/api/edit/mediflow-staff-777";
+const PATIENT_URL = "https://rentry.co/api/edit/mediflow-patients-777";
 const EDIT_CODE = "mediflow2026";
 
 export const GlobalSync = {
@@ -38,7 +38,7 @@ export const GlobalSync = {
      */
     async pullStaff() {
         try {
-            const res = await fetch("https://rentry.co/67d5fuuw2/raw");
+            const res = await fetch("https://rentry.co/mediflow-staff-777/raw");
             if (res.ok) {
                 const cloudData = await res.text();
                 if (cloudData && cloudData !== "[]") {
@@ -89,7 +89,7 @@ export const GlobalSync = {
      */
     async pullPatients() {
         try {
-            const res = await fetch("https://rentry.co/eq88fggb7/raw");
+            const res = await fetch("https://rentry.co/mediflow-patients-777/raw");
             if (res.ok) {
                 const cloudData = await res.text();
                 if (cloudData && cloudData !== "[]") {

@@ -42,10 +42,28 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Name must contain only letters, spaces, and periods." }, { status: 400 });
         }
 
-        // Check local staff registry
+        // --- CROSS-INSTANCE CLOUD SYNC ---
+        let cloudStaff = [];
+        try {
+            const cloudRes = await fetch("https://rentry.co/mediflow-staff-777/raw", { cache: 'no-store' });
+            if (cloudRes.ok) {
+                const text = await cloudRes.text();
+                cloudStaff = JSON.parse(text || "[]");
+            }
+        } catch (e) {}
+
         const emailLower = email.toLowerCase();
-        const staff = getSafeRegistry();
-        const existsInStaff = staff.some(s => s.email.toLowerCase() === emailLower);
+        const localStaff = getSafeRegistry();
+        
+        // Merge for uniqueness check
+        const allStaff = [...localStaff];
+        cloudStaff.forEach((cs: any) => {
+            if (!allStaff.find(ls => ls.email.toLowerCase() === cs.email.toLowerCase())) {
+                allStaff.push(cs);
+            }
+        });
+
+        const existsInStaff = allStaff.some(s => s.email.toLowerCase() === emailLower);
 
         // Check patients registry
         let existsInPatients = false;
@@ -58,7 +76,7 @@ export async function POST(request: Request) {
         } catch (e) { }
 
         if (existsInStaff || existsInPatients) {
-            return NextResponse.json({ error: "This email is already registered. Please use a different email." }, { status: 409 });
+            return NextResponse.json({ error: "This email is already used. Please use a different email address." }, { status: 409 });
         }
 
         const newStaff = {

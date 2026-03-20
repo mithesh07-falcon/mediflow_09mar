@@ -239,11 +239,39 @@ export async function POST(request: Request) {
                 );
             }
 
-            const patients = readPatients();
-            const staffRegistry = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src', 'lib', 'staff-db.json'), 'utf8') || "[]");
+            let staffRegistry = [];
+            try {
+                const staffPath = path.join(process.cwd(), 'src', 'lib', 'staff-db.json');
+                if (fs.existsSync(staffPath)) {
+                    staffRegistry = JSON.parse(fs.readFileSync(staffPath, 'utf8') || "[]");
+                }
+            } catch(e) {}
+
+            // --- CROSS-INSTANCE CLOUD SYNC ---
+            // On Vercel, the local file system is ephemeral and doesn't share data between functions.
+            // We pull from the shared cloud registry (rentry.co) to ensure uniqueness.
+            let cloudPatients = [];
+            try {
+                const cloudRes = await fetch("https://rentry.co/mediflow-patients-777/raw", { cache: 'no-store' });
+                if (cloudRes.ok) {
+                    const text = await cloudRes.text();
+                    cloudPatients = JSON.parse(text || "[]");
+                }
+            } catch (e) {
+                console.warn("[API:Patients] Cloud pull failed during registration. Falling back to local check.");
+            }
+
+            const localPatients = readPatients();
+            // Merge to get the full picture
+            const allPatients = [...localPatients];
+            cloudPatients.forEach((cp: any) => {
+                if (!allPatients.find(lp => lp.email.toLowerCase() === cp.email.toLowerCase())) {
+                    allPatients.push(cp);
+                }
+            });
 
             // Check phone uniqueness
-            if (patients.some((p) => p.phone.replace(/\s/g, "") === phoneClean)) {
+            if (allPatients.some((p) => p.phone.replace(/\s/g, "") === phoneClean)) {
                 console.warn(`[API:Patients:Register] Phone conflict: ${phoneClean}`);
                 return NextResponse.json(
                     { error: "This phone number is already registered within the MediFlow network." },
@@ -252,13 +280,13 @@ export async function POST(request: Request) {
             }
 
             // Check email uniqueness (Cross-role check)
-            const emailInPatients = patients.some((p) => p.email.toLowerCase() === emailLower);
+            const emailInPatients = allPatients.some((p) => p.email.toLowerCase() === emailLower);
             const emailInStaff = staffRegistry.some((s: any) => s.email.toLowerCase() === emailLower);
 
             if (emailInPatients || emailInStaff) {
                 console.warn(`[API:Patients:Register] Email conflict: ${emailLower}`);
                 return NextResponse.json(
-                    { error: "This email is already registered. Please use a different email." },
+                    { error: "This email is already used. Please use a different email address." },
                     { status: 409 }
                 );
             }
@@ -278,8 +306,8 @@ export async function POST(request: Request) {
                 language: language || "English"
             };
 
-            patients.push(newPatient);
-            writePatients(patients);
+            localPatients.push(newPatient);
+            writePatients(localPatients);
             console.log(`[API:Patients:Register] Successfully registered: ${emailLower}`);
 
             const { password: _, ...safePatient } = newPatient;

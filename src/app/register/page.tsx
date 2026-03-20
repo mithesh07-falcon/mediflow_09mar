@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -53,14 +53,30 @@ export default function RegisterPage() {
     { name: "Bengali", native: "বাংলা" },
     { name: "Marathi", native: "मराठी" },
   ];
+  
+  useEffect(() => {
+    // Hard pull latest data on mount for duplicate protection
+    GlobalSync.pullPatients();
+    GlobalSync.pullStaff();
+  }, []);
 
   const checkEmailUnique = async (val: string) => {
     if (!val || !val.includes("@")) return;
     try {
+      // 1. Check local first (populated by pull)
+      const patients = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+      const staff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+      if (patients.some((p: any) => p.email.toLowerCase() === val.toLowerCase()) || 
+          staff.some((s: any) => s.email.toLowerCase() === val.toLowerCase())) {
+        setEmailError("This email is already used. Please use a different email address.");
+        return;
+      }
+
+      // 2. Check API
       const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(val)}`);
       const data = await res.json();
       if (data.exists) {
-        setEmailError("This email is already registered. Please use a different email.");
+        setEmailError("This email is already used. Please use a different email address.");
       } else {
         setEmailError("");
       }
@@ -139,7 +155,7 @@ export default function RegisterPage() {
       const isDuplicate = localPool.some((p: any) => p.email.toLowerCase() === emailLower) || localStaff.some((s: any) => s.email.toLowerCase() === emailLower);
       
       if (isDuplicate) {
-        toast({ variant: "destructive", title: "Registration Blocked", description: "An account with this email address already exists in the MediFlow system. Try logging in instead." });
+        toast({ variant: "destructive", title: "Registration Blocked", description: "This email is already used. Try logging in or use another email address." });
         setLoading(false);
         return;
       }
