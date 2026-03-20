@@ -21,10 +21,15 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Missing required fields or invalid phone format (must be 10 digits starting with 6, 7, 8, or 9)." }, { status: 400 });
         }
 
+        // --- CONSTRAINT: Must be @mediflow.com domain ---
+        if (!email.toLowerCase().endsWith("@mediflow.com")) {
+            return NextResponse.json({ error: "Staff IDs must end in @mediflow.com. Gmail accounts are reserved for patients." }, { status: 400 });
+        }
+
         // CONSTRAINT 12: Email format
         const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         if (!emailRegex.test(email.toLowerCase())) {
-            return NextResponse.json({ error: "Invalid email format. Use format like example@gmail.com." }, { status: 400 });
+            return NextResponse.json({ error: "Invalid email format. Use format like name@mediflow.com." }, { status: 400 });
         }
 
         // CONSTRAINT 11: Password strength

@@ -23,13 +23,12 @@ export async function GET(request: Request) {
             console.error("Error reading patients file", e);
         }
     }
-    const emailInPatients = patients.some((p: any) => p.email.toLowerCase() === email);
-
-    // 2. Check Staff (Doctors/Pharmacists)
+    const inPatients = patients.find((p: any) => p.email.toLowerCase() === email);
     const staff = getSafeRegistry();
-    const emailInStaff = staff.some((s: any) => s.email.toLowerCase() === email);
+    const inStaff = staff.find((s: any) => s.email.toLowerCase() === email);
 
-    const exists = emailInPatients || emailInStaff;
+    const exists = !!inPatients || !!inStaff;
+    const data = inStaff ? { name: inStaff.name, role: inStaff.role } : (inPatients ? { name: `${inPatients.firstName} ${inPatients.lastName}`, role: 'patient' } : null);
 
-    return NextResponse.json({ exists });
+    return NextResponse.json({ exists, data });
 }

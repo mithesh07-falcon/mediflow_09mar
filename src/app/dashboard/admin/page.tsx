@@ -82,7 +82,7 @@ export default function FormalAdminDashboard() {
       const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(val)}`);
       const data = await res.json();
       if (data.exists) {
-        setEmailError("This email is already registered. Please use a different email.");
+        setEmailError(`Existing Account Detected: ${data.data?.name || "User"} (${data.data?.role || "Staff"}). Please use a unique ID.`);
       } else {
         setEmailError("");
       }
@@ -227,6 +227,16 @@ export default function FormalAdminDashboard() {
       toast({ variant: "destructive", title: "Invalid Name", description: "Name must contain only letters, spaces, and periods." });
       return;
     }
+    // --- CONSTRAINT: Must be @mediflow.com domain ---
+    if (!newStaff.email.toLowerCase().endsWith("@mediflow.com")) {
+      toast({ 
+        variant: "destructive", 
+        title: "Invalid Domain", 
+        description: "Official staff access restricted to @mediflow.com domains only. Gmail/Outlook accounts are for patients." 
+      });
+      return;
+    }
+
     // CONSTRAINT 12: Email format
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(newStaff.email)) {
@@ -549,15 +559,20 @@ export default function FormalAdminDashboard() {
                     <Input value={newStaff.name} onChange={e => setNewStaff({ ...newStaff, name: e.target.value.replace(/[^a-zA-Z\s.]/g, '') })} placeholder="Dr. Sarah Johnson" className="h-14 rounded-2xl border-2 font-bold" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Official ID (Email)</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Official ID (Must end in @mediflow.com)</Label>
                     <Input
                       value={newStaff.email}
+                      onBlur={() => {
+                        if (newStaff.email && !newStaff.email.toLowerCase().endsWith("@mediflow.com")) {
+                           toast({ variant: "destructive", title: "Invalid Domain", description: "All staff IDs MUST end in @mediflow.com. Gmail/Other domains are for patients only." });
+                        }
+                      }}
                       onChange={e => {
-                        setNewStaff({ ...newStaff, email: e.target.value });
+                        setNewStaff({ ...newStaff, email: e.target.value.toLowerCase() });
                         checkEmailUnique(e.target.value);
                       }}
-                      placeholder="staff-name@mediflow.com"
-                      className={`h-14 rounded-2xl border-2 font-bold ${emailError ? 'border-red-500' : ''}`}
+                      placeholder="e.g. j.doe@mediflow.com"
+                      className={`h-14 rounded-2xl border-2 font-bold ${emailError ? 'border-red-500' : (newStaff.email && !newStaff.email.toLowerCase().endsWith("@mediflow.com") ? 'border-amber-500' : '')}`}
                     />
                     {emailError && <p className="text-[10px] text-red-600 font-bold ml-1">{emailError}</p>}
                   </div>
