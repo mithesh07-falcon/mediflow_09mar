@@ -79,13 +79,21 @@ export default function MultiRoleLoginPage() {
         const result = await res.json();
 
         if (!res.ok || !result.success) {
-          toast({
-            variant: "destructive",
-            title: "Access Denied",
-            description: result.error || "Invalid credentials. Doctor accounts are hospital-managed. Contact Admin.",
-          });
-          setLoading(false);
-          return;
+          // --- VERCEL EPHEMERAL FALLBACK ---
+          const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+          const matched = localStaff.find((s: any) => s.role === 'doctor' && s.email.toLowerCase() === email && (s.password === password || s.passwordPlain === password));
+          
+          if (!matched) {
+            toast({
+              variant: "destructive",
+              title: "Access Denied",
+              description: result.error || "Invalid credentials. Doctor accounts are hospital-managed. Contact Admin.",
+            });
+            setLoading(false);
+            return;
+          } else {
+            result.doctor = matched;
+          }
         }
 
         const doc = result.doctor;
@@ -126,9 +134,17 @@ export default function MultiRoleLoginPage() {
         const result = await res.json();
 
         if (!res.ok || !result.success) {
-          toast({ variant: "destructive", title: "Access Denied", description: result.error || "No pharmacy account found." });
-          setLoading(false);
-          return;
+          // --- VERCEL EPHEMERAL FALLBACK ---
+          const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+          const matched = localStaff.find((s: any) => s.role === 'pharmacist' && s.email.toLowerCase() === email && (s.password === password || s.passwordPlain === password));
+          
+          if (!matched) {
+            toast({ variant: "destructive", title: "Access Denied", description: result.error || "No pharmacy account found." });
+            setLoading(false);
+            return;
+          } else {
+            result.pharmacist = matched;
+          }
         }
 
         const pharmacist = result.pharmacist;

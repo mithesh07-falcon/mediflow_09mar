@@ -41,13 +41,22 @@ export default function LoginPage() {
         const result = await res.json();
 
         if (!res.ok || !result.success) {
-          toast({
-            variant: "destructive",
-            title: "Access Denied",
-            description: result.error || "Invalid credentials. Doctor accounts are hospital-managed.",
-          });
-          setLoading(false);
-          return;
+          // --- VERCEL EPHEMERAL FALLBACK ---
+          const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+          const matched = localStaff.find((s: any) => s.role === 'doctor' && s.email.toLowerCase() === data.email.toLowerCase() && (s.password === data.password || s.passwordPlain === data.password));
+          
+          if (!matched) {
+            toast({
+              variant: "destructive",
+              title: "Access Denied",
+              description: result.error || "Invalid credentials. Doctor accounts are hospital-managed.",
+            });
+            setLoading(false);
+            return;
+          } else {
+            result.doctor = matched;
+            result.success = true;
+          }
         }
 
         const doc = result.doctor;
@@ -166,6 +175,48 @@ export default function LoginPage() {
       setLoading(false);
       toast({ title: "Senior Access Granted", description: "Welcome to your simplified home." });
       router.push('/dashboard/elderly');
+      return;
+    }
+
+    // Pharmacist authentication
+    if (role === 'pharmacist') {
+      try {
+        const res = await fetch('/api/pharmacists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: data.email, password: data.password }),
+        });
+        const result = await res.json();
+
+        if (!res.ok || !result.success) {
+          // --- VERCEL EPHEMERAL FALLBACK ---
+          const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+          const matched = localStaff.find((s: any) => s.role === 'pharmacist' && s.email.toLowerCase() === data.email.toLowerCase() && (s.password === data.password || s.passwordPlain === data.password));
+          
+          if (!matched) {
+            toast({ variant: "destructive", title: "Access Denied", description: "No pharmacy account found." });
+            setLoading(false);
+            return;
+          } else {
+            result.pharmacist = matched;
+          }
+        }
+
+        const pharmacist = result.pharmacist;
+        localStorage.setItem("mediflow_current_user", JSON.stringify({
+          email: pharmacist.email,
+          role: 'pharmacist',
+          firstName: pharmacist.name,
+          specialization: "Clinical Pharmacy"
+        }));
+
+        setLoading(false);
+        toast({ title: "Access Granted", description: `Welcome to MediFlow HQ.` });
+        router.push('/dashboard/pharmacist');
+      } catch (err) {
+        toast({ variant: "destructive", title: "Server Error", description: "Pharmacist database offline." });
+        setLoading(false);
+      }
       return;
     }
 

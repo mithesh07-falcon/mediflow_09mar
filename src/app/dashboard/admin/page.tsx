@@ -256,6 +256,23 @@ export default function FormalAdminDashboard() {
       const data = await res.json();
       if (res.ok) {
         setGeneratedCreds(data.credentials);
+        
+        // --- FALLBACK FOR VERCEL EPHEMERAL MEMORY ---
+        // Save to localStorage so admin and doctor testing on the same browser can login 
+        // even if Vercel serverless function memory resets.
+        try {
+          const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+          if (!localStaff.some((s: any) => s.email.toLowerCase() === newStaff.email.toLowerCase())) {
+            localStaff.push({
+              ...newStaff,
+              id: Date.now(),
+              passwordPlain: newStaff.password,
+              password: newStaff.password
+            });
+            localStorage.setItem("mediflow_staff", JSON.stringify(localStaff));
+          }
+        } catch(e) {}
+        
         setNewStaff({ name: "", email: "", password: "", role: "doctor", specialization: "", license: "", phone: "+91 " });
         fetchData();
         toast({ title: "Success", description: `Credential generated and securely hashed in registry.` });
