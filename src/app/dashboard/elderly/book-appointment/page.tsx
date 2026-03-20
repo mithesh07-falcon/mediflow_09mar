@@ -1,5 +1,6 @@
 "use client";
 
+import { GlobalSync } from "@/lib/sync-service";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import {
@@ -40,9 +41,23 @@ export default function BookAppointmentPage() {
     useEffect(() => {
         const fetchStaff = async () => {
             try {
+                // --- GLOBAL CLOUD SYNC ---
+                await GlobalSync.pullStaff();
+
                 const res = await fetch("/api/admin/staff");
                 const data = await res.json();
-                if (data.staff) setStaff(data.staff);
+                if (data.staff) {
+                    let allStaff = [...data.staff];
+                    try {
+                        const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+                        localStaff.forEach((ls: any) => {
+                            if (!allStaff.find(s => s.email.toLowerCase() === ls.email.toLowerCase())) {
+                                allStaff.push(ls);
+                            }
+                        });
+                    } catch(e) {}
+                    setStaff(allStaff);
+                }
             } catch (err) {
                 console.error("Failed to fetch clinical staff", err);
             }

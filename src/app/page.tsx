@@ -1,4 +1,4 @@
-
+import { GlobalSync } from "@/lib/sync-service";
 "use client";
 
 import { useState, useEffect } from "react";
@@ -80,6 +80,9 @@ export default function MultiRoleLoginPage() {
 
         if (!res.ok || !result.success) {
           // --- VERCEL EPHEMERAL FALLBACK ---
+          // 1. Try pulling from cloud first to handle "other device" registrations
+          await GlobalSync.pullStaff();
+          
           const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
           const matched = localStaff.find((s: any) => s.role === 'doctor' && s.email.toLowerCase() === email && (s.password === password || s.passwordPlain === password));
           
@@ -135,6 +138,9 @@ export default function MultiRoleLoginPage() {
 
         if (!res.ok || !result.success) {
           // --- VERCEL EPHEMERAL FALLBACK ---
+          // 1. Try pulling from cloud first to handle "other device" registrations
+          await GlobalSync.pullStaff();
+          
           const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
           const matched = localStaff.find((s: any) => s.role === 'pharmacist' && s.email.toLowerCase() === email && (s.password === password || s.passwordPlain === password));
           

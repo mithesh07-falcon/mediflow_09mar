@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { GlobalSync } from "@/lib/sync-service";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -70,11 +71,25 @@ export default function AppointmentPage() {
     // Fetch doctors from Server API
     const fetchDoctors = async () => {
       try {
+        // --- GLOBAL CLOUD SYNC ---
+        await GlobalSync.pullStaff();
+
         const res = await fetch('/api/doctors');
         const data = await res.json();
         if (data.doctors) {
-          setOnboardedDoctors(data.doctors);
-          const specs = Array.from(new Set(data.doctors.map((d: any) => d.specialization))) as string[];
+          let allDoctors = [...data.doctors];
+          try {
+            const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+            const localDoctors = localStaff.filter((s: any) => s.role === 'doctor');
+            localDoctors.forEach((ld: any) => {
+              if (!allDoctors.find(d => d.email.toLowerCase() === ld.email.toLowerCase())) {
+                allDoctors.push(ld);
+              }
+            });
+          } catch(e) {}
+          
+          setOnboardedDoctors(allDoctors);
+          const specs = Array.from(new Set(allDoctors.map((d: any) => d.specialization))) as string[];
           setSpecializations(specs);
 
           // AUTO-SELECT for recommendation
@@ -127,7 +142,7 @@ export default function AppointmentPage() {
             setRecommendedSpec(resolvedSpec);
             setFilterSpec(resolvedSpec);
 
-            const suggestedDoc = data.doctors.find((d: any) =>
+            const suggestedDoc = allDoctors.find((d: any) =>
               d.specialization === resolvedSpec ||
               d.specialization?.toLowerCase() === normalizedAI
             );

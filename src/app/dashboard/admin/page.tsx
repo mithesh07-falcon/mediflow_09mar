@@ -1,4 +1,4 @@
-
+import { GlobalSync } from "@/lib/sync-service";
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -270,6 +270,10 @@ export default function FormalAdminDashboard() {
               password: newStaff.password
             });
             localStorage.setItem("mediflow_staff", JSON.stringify(localStaff));
+            
+            // --- GLOBAL CLOUD SYNC ---
+            // Push to cloud so other devices can access these credentials
+            GlobalSync.pushStaff();
           }
         } catch(e) {}
         

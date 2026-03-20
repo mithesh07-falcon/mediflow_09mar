@@ -1,5 +1,6 @@
 "use client";
 
+import { GlobalSync } from "@/lib/sync-service";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,9 @@ export default function LoginPage() {
 
         if (!res.ok || !result.success) {
           // --- VERCEL EPHEMERAL FALLBACK ---
+          // 1. Try pulling from cloud first to handle "other device" registrations
+          await GlobalSync.pullStaff();
+          
           const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
           const matched = localStaff.find((s: any) => s.role === 'doctor' && s.email.toLowerCase() === data.email.toLowerCase() && (s.password === data.password || s.passwordPlain === data.password));
           
@@ -124,6 +128,9 @@ export default function LoginPage() {
 
         // FALLBACK: If server doesn't have the user (happens on Vercel resets), check local storage
         if (!patient) {
+          // --- GLOBAL CLOUD SYNC ---
+          await GlobalSync.pullPatients();
+          
           const localPool = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
           const matched = localPool.find((p: any) => p.email.toLowerCase() === data.email.toLowerCase() && p.password === data.password);
           if (matched) {
@@ -190,6 +197,9 @@ export default function LoginPage() {
 
         if (!res.ok || !result.success) {
           // --- VERCEL EPHEMERAL FALLBACK ---
+          // 1. Try pulling from cloud first to handle "other device" registrations
+          await GlobalSync.pullStaff();
+          
           const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
           const matched = localStaff.find((s: any) => s.role === 'pharmacist' && s.email.toLowerCase() === data.email.toLowerCase() && (s.password === data.password || s.passwordPlain === data.password));
           

@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+import { GlobalSync } from "@/lib/sync-service";
 import { Logo } from "@/components/shared/Logo";
 
 export default function RegisterPage() {
@@ -173,6 +174,9 @@ export default function RegisterPage() {
         language: selectedLanguage
       });
       localStorage.setItem("mediflow_patients", JSON.stringify(saved));
+      
+      // --- GLOBAL CLOUD SYNC ---
+      GlobalSync.pushPatients();
 
       setLoading(false);
       toast({
