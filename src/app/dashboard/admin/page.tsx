@@ -1,5 +1,5 @@
-import { GlobalSync } from "@/lib/sync-service";
 "use client";
+import { GlobalSync } from "@/lib/sync-service";
 
 import { useState, useEffect, useCallback } from "react";
 import { SidebarNav } from "@/components/layout/SidebarNav";

@@ -1,5 +1,5 @@
-import { GlobalSync } from "@/lib/sync-service";
 "use client";
+import { GlobalSync } from "@/lib/sync-service";
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
