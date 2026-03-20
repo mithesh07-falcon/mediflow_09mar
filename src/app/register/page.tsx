@@ -128,6 +128,23 @@ export default function RegisterPage() {
       return;
     }
 
+    // --- GLOBAL DUPLICATE PROTECTION ---
+    try {
+      // 1. Pull latest cloud data to ensure we have accounts from other devices/sessions
+      await GlobalSync.pullPatients();
+      await GlobalSync.pullStaff();
+      
+      const localPool = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+      const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+      const isDuplicate = localPool.some((p: any) => p.email.toLowerCase() === emailLower) || localStaff.some((s: any) => s.email.toLowerCase() === emailLower);
+      
+      if (isDuplicate) {
+        toast({ variant: "destructive", title: "Registration Blocked", description: "An account with this email address already exists in the MediFlow system. Try logging in instead." });
+        setLoading(false);
+        return;
+      }
+    } catch(e) {}
+
     try {
       const res = await fetch('/api/patients', {
         method: 'POST',

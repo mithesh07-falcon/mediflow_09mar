@@ -79,10 +79,23 @@ export default function FormalAdminDashboard() {
   const checkEmailUnique = async (val: string) => {
     if (!val || !val.includes("@")) return;
     try {
+      // 1. Check Local Sync Pool (Client-Side)
+      const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
+      const localPatients = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+      const inLocalStaff = localStaff.find((s: any) => s.email.toLowerCase() === val.toLowerCase());
+      const inLocalPatients = localPatients.find((p: any) => p.email.toLowerCase() === val.toLowerCase());
+      
+      if (inLocalStaff || inLocalPatients) {
+        const found = inLocalStaff || inLocalPatients;
+        setEmailError(`Existing Account (Local): ${found.name || (found.firstName + " " + found.lastName)} (${found.role || "Staff"}). Duplicate blocked.`);
+        return;
+      }
+
+      // 2. Check Cloud/Server API
       const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(val)}`);
       const data = await res.json();
       if (data.exists) {
-        setEmailError(`Existing Account Detected: ${data.data?.name || "User"} (${data.data?.role || "Staff"}). Please use a unique ID.`);
+        setEmailError(`Existing Account (Global): ${data.data?.name || "User"} (${data.data?.role || "Staff"}). Duplicate blocked.`);
       } else {
         setEmailError("");
       }
@@ -168,6 +181,10 @@ export default function FormalAdminDashboard() {
 
   const fetchData = useCallback(async () => {
     try {
+      // --- GLOBAL CLOUD SYNC ---
+      await GlobalSync.pullStaff();
+      await GlobalSync.pullPatients();
+
       // 1. Fetch Staff (Unified endpoint for admin)
       const staffRes = await fetch('/api/admin/staff');
       const staffData = await staffRes.json();
