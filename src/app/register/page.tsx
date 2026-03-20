@@ -61,14 +61,16 @@ export default function RegisterPage() {
   }, []);
 
   const checkEmailUnique = async (val: string) => {
-    if (!val || !val.includes("@")) return;
+    if (!val) { setEmailError(""); return; }
+    if (!val.includes("@")) { setEmailError(""); return; }
+
     try {
       // 1. Check local first (populated by pull)
       const patients = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
       const staff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
       if (patients.some((p: any) => p.email.toLowerCase() === val.toLowerCase()) || 
           staff.some((s: any) => s.email.toLowerCase() === val.toLowerCase())) {
-        setEmailError("This email is already used. Please use a different email address.");
+        setEmailError("This email already existed. Please use a different one.");
         return;
       }
 
@@ -76,7 +78,7 @@ export default function RegisterPage() {
       const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(val)}`);
       const data = await res.json();
       if (data.exists) {
-        setEmailError("This email is already used. Please use a different email address.");
+        setEmailError("This email already existed. Please use a different one.");
       } else {
         setEmailError("");
       }
@@ -155,7 +157,7 @@ export default function RegisterPage() {
       const isDuplicate = localPool.some((p: any) => p.email.toLowerCase() === emailLower) || localStaff.some((s: any) => s.email.toLowerCase() === emailLower);
       
       if (isDuplicate) {
-        toast({ variant: "destructive", title: "Registration Blocked", description: "This email is already used. Try logging in or use another email address." });
+        toast({ variant: "destructive", title: "Registration Blocked", description: "This email already existed. Please use another email address or try signing in." });
         setLoading(false);
         return;
       }
