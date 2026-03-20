@@ -90,16 +90,17 @@ export default function FormalAdminDashboard() {
         setEmailError(`Existing Account (Local): ${found.name || (found.firstName + " " + found.lastName)} (${found.role || "Staff"}). Duplicate blocked.`);
         return;
       }
-
-      // 2. Check Cloud/Server API
-      const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(val)}`);
-      const data = await res.json();
-      if (data.exists) {
-        setEmailError(`Existing Account (Global): ${data.data?.name || "User"} (${data.data?.role || "Staff"}). Duplicate blocked.`);
-      } else if (!val.toLowerCase().endsWith("@mediflow.com")) {
-        setEmailError("invalid type: Staff registry strictly restricted to @mediflow.com domains.");
+      // 2. Check Cloud/Server API (Optional skip if domain obviously wrong, but let's keep it for duplicate check if it's correct)
+      if (val.toLowerCase().endsWith("@mediflow.com")) {
+        const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(val)}`);
+        const data = await res.json();
+        if (data.exists) {
+          setEmailError(`Existing Account (Global): ${data.data?.name || "User"} (${data.data?.role || "Staff"}). Duplicate blocked.`);
+        } else {
+          setEmailError("");
+        }
       } else {
-        setEmailError("");
+        setEmailError("it is invalid format");
       }
     } catch (e) {
       console.error("Email check failed", e);
@@ -250,8 +251,8 @@ export default function FormalAdminDashboard() {
     if (!newStaff.email.toLowerCase().endsWith("@mediflow.com")) {
       toast({ 
         variant: "destructive", 
-        title: "invalid type", 
-        description: "Official staff access restricted to @mediflow.com domains only. Gmail/Outlook accounts are for patients." 
+        title: "it is invalid format", 
+        description: "Official staff access strictly restricted to @mediflow.com domains only." 
       });
       return;
     }
@@ -583,7 +584,7 @@ export default function FormalAdminDashboard() {
                       value={newStaff.email}
                       onBlur={() => {
                         if (newStaff.email && !newStaff.email.toLowerCase().endsWith("@mediflow.com")) {
-                           toast({ variant: "destructive", title: "invalid type", description: "All staff IDs MUST end in @mediflow.com. Gmail/Other domains are for patients only." });
+                           toast({ variant: "destructive", title: "it is invalid format", description: "Official staff IDs MUST end in @mediflow.com." });
                         }
                       }}
                       onChange={e => {
