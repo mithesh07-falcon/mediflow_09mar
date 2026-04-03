@@ -94,6 +94,12 @@ export function AIDoctorRecommender() {
     // Capture loop
     while (!stopFlagRef.current) {
       if (!videoRef.current) break;
+      
+      // Gathering voice for a bit before first AI check
+      if (symptoms.length < 5) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+
       try {
         const canvas = document.createElement("canvas");
         canvas.width = videoRef.current.videoWidth || 640;
@@ -101,28 +107,44 @@ export function AIDoctorRecommender() {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          const base64 = canvas.toDataURL("image/jpeg", 0.5).split(",")[1];
+          const base64 = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
           const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
+          
+          const transcriptSnap = symptoms;
           
           const aiRes = await detectBodyPart({
             imageBase64: base64,
-            voiceTranscript: symptoms || "Scanning body part",
+            voiceTranscript: transcriptSnap || "Scanning body part",
             staffList: staffJson
           });
 
-          if (aiRes.symptomId && aiRes.symptomId !== "fever") {
+          // Strict validation: Must not be fever/general to auto-stop
+          if (aiRes.symptomId && aiRes.symptomId !== "fever" && aiRes.specialistType !== "General Physician" && aiRes.specialistType !== "General") {
             setResult({ recommendedSpecialist: aiRes.specialistType, reason: aiRes.reason });
             if (aiRes.detectedSymptoms) setDetectedSymptoms(aiRes.detectedSymptoms);
             if (aiRes.predictedDoctorName) {
-              // Hacky way to pass doctor name to output schema compatibility
               (result as any).predictedDoctorName = aiRes.predictedDoctorName;
             }
+            
+            toast({ title: "Specialist Found!", description: aiRes.reason });
+
+            if (window.speechSynthesis) {
+                const msg = userLang === "Hindi" 
+                    ? `हमें मिल गया! आपके लिए ${aiRes.specialistType} विशेषज्ञ ${aiRes.predictedDoctorName} सही रहेंगे।`
+                    : `Specialist found! We recommend ${aiRes.predictedDoctorName} for ${aiRes.specialistType}.`;
+                const utterance = new SpeechSynthesisUtterance(msg);
+                utterance.lang = getLangCode(userLang);
+                window.speechSynthesis.speak(utterance);
+            }
+
             stopScanning();
             return;
           }
         }
       } catch (e) {}
-      await new Promise(r => setTimeout(r, 4000));
+      
+      // Wait 6 seconds between AI checks
+      await new Promise(r => setTimeout(r, 6000));
     }
   };
 

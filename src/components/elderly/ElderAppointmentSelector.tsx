@@ -160,45 +160,73 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                 }
             }
 
+            // Loop every 6 seconds to give AI processing and voice gathering time
             while (!stopFlagRef.current) {
                 if (!videoRef.current) break;
                 
+                // Allow some time for voice gathering before first AI call
+                if (capturedTranscript.length < 5) {
+                    await new Promise(r => setTimeout(r, 3000));
+                }
+
                 try {
-                    const vw = videoRef.current.videoWidth || 640;
-                    const vh = videoRef.current.videoHeight || 480;
                     const canvas = document.createElement("canvas");
-                    canvas.width = vw;
-                    canvas.height = vh;
+                    canvas.width = videoRef.current.videoWidth || 640;
+                    canvas.height = videoRef.current.videoHeight || 480;
                     const ctx = canvas.getContext("2d");
                     if (ctx) {
-                        ctx.drawImage(videoRef.current, 0, 0, vw, vh);
-                        const base64Image = canvas.toDataURL("image/jpeg", 0.5).split(",")[1];
+                        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                        const base64Image = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
                         
                         const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
+                        
+                        // Send current transcript snapshot
+                        const currentTranscriptSnap = capturedTranscript;
+                        
+                        console.log(`[Scan:AI] Analyzing with transcript: "${currentTranscriptSnap}"`);
+                        
                         const response = await detectBodyPart({
                             imageBase64: base64Image,
-                            voiceTranscript: capturedTranscript || "Patient is showing a body part.",
+                            voiceTranscript: currentTranscriptSnap || "Scanning body part pointing...",
                             staffList: staffJson
                         });
 
-                        if (response.symptomId && response.symptomId !== "fever") {
+                        // Only stop if we found a specific non-general specialty with high confidence
+                        if (response.symptomId && response.symptomId !== "fever" && response.specialistType !== "General Physician" && response.specialistType !== "General") {
                             setPredictedDoctor(response.predictedDoctorName);
                             setScanReason(response.reason);
                             if (response.detectedSymptoms) setDetectedSymptoms(response.detectedSymptoms);
                             setSelectedSymptom(response.symptomId);
-                            toast({ title: "Specialist Found!", description: response.reason });
+                            
+                            toast({ title: "Specialist Identified!", description: response.reason });
+                            
+                            // Success! Speak result and stop.
+                            if (window.speechSynthesis) {
+                                const successMsg = user.language === "Hindi" 
+                                    ? `हमें मिल गया! आपके लिए ${response.specialistType} विशेषज्ञ ${response.predictedDoctorName} ठीक रहेंगे।`
+                                    : `Found it! ${response.specialistType} specialist ${response.predictedDoctorName} is recommended for you.`;
+                                const successUtterance = new SpeechSynthesisUtterance(successMsg);
+                                successUtterance.lang = langCode;
+                                window.speechSynthesis.speak(successUtterance);
+                            }
+
                             setIsScanning(false);
-                            if (recognitionRef.current) recognitionRef.current.stop();
-                            setStep(1); // Stay on step 1 to show detection, then it auto-transitions or wait for user
-                            setTimeout(() => setStep(2), 2000);
+                            setIsListening(false);
+                            if (recognitionRef.current) try { recognitionRef.current.stop(); } catch {}
+                            
+                            setStep(1); 
+                            setTimeout(() => setStep(2), 2500);
                             return;
+                        } else {
+                            console.log("[Scan:AI] No specific result yet, continuing...");
                         }
                     }
                 } catch (e) {
                     console.error("Loop scan error", e);
                 }
 
-                await new Promise(r => setTimeout(r, 4000));
+                // Wait 6 seconds between AI checks to avoid overwhelming and allow voice collection
+                await new Promise(r => setTimeout(r, 6000));
             }
 
             setIsScanning(false);
@@ -317,26 +345,40 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                 {cameraError ? <div className="p-8 text-white text-center font-bold">{cameraError}</div> : <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted />}
                                 {isScanning && (
                                     <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white backdrop-blur-md">
+                                        <div className="absolute top-4 left-4 flex gap-2">
+                                            <div className="h-4 w-4 bg-red-600 rounded-full animate-ping" />
+                                            <span className="text-xl font-black uppercase tracking-widest text-red-500">LIVE SCANNING</span>
+                                        </div>
+
                                         {isListening ? (
                                             <>
                                                 <div className="h-32 w-32 border-[8px] border-red-500 rounded-full flex items-center justify-center animate-pulse mb-4">
-                                                    <Mic className="h-16 w-16 text-red-400" />
+                                                    <Mic className="h-16 w-16 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]" />
                                                 </div>
-                                                <h3 className="text-3xl font-black text-red-400">LISTENING...</h3>
-                                                <p className="text-lg text-white/60 font-bold mt-2">Point your finger at the pain & speak</p>
+                                                <h3 className="text-4xl font-black text-red-400 uppercase tracking-tighter">I'm Listening...</h3>
+                                                <p className="text-xl text-white/80 font-bold mt-2">Point and describe your pain</p>
+                                                
                                                 {voiceTranscript && (
-                                                    <div className="mt-4 px-6 py-3 bg-white/10 rounded-2xl border border-white/20">
-                                                        <p className="text-xl font-bold text-green-400">"{voiceTranscript}"</p>
+                                                    <div className="mt-8 px-8 py-4 bg-white/10 rounded-[2rem] border-2 border-white/20 max-w-[80%] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4">
+                                                        <p className="text-2xl font-black text-green-400 italic leading-tight">
+                                                            "{voiceTranscript}"
+                                                        </p>
                                                     </div>
                                                 )}
+
+                                                <div className="absolute bottom-8 flex flex-col items-center gap-2">
+                                                    <div className="flex gap-1">
+                                                        {[1, 2, 3, 4, 5].map(i => (
+                                                            <div key={i} className="h-8 w-1 bg-primary/40 rounded-full animate-[bounce_1s_infinite]" style={{ animationDelay: `${i * 0.1}s` }} />
+                                                        ))}
+                                                    </div>
+                                                    <p className="text-sm font-black uppercase tracking-[0.3em] opacity-40">AI Analyzing continuous frame</p>
+                                                </div>
                                             </>
                                         ) : (
                                             <>
-                                                <Loader2 className="h-16 w-16 animate-spin mb-4 text-green-400" />
-                                                <h3 className="text-3xl font-black text-green-400">ANALYZING...</h3>
-                                                {voiceTranscript && (
-                                                    <p className="text-lg text-white/60 font-bold mt-2">You said: "{voiceTranscript}"</p>
-                                                )}
+                                                <Loader2 className="h-24 w-24 animate-spin mb-4 text-primary" />
+                                                <h3 className="text-3xl font-black text-primary uppercase">Almost there...</h3>
                                             </>
                                         )}
                                     </div>
