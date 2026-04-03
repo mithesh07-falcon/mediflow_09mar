@@ -150,13 +150,14 @@ the medical concern, extract the explicit symptoms visually from the image or ve
 STRICT MULTIMODAL RULES:
 1. **VOICE IS PRIORITY**: The voice transcript is the most accurate source of symptoms. If the patient says "my eyes hurt" but shows a generic photo, map to "eyes".
 2. **REGIONAL LANGUAGES**: The patient may speak in Hindi, Telugu, Tamil, Kannada, Bengali, or Marathi. Understand these regional terms (e.g., "dil" = heart, "pait" = stomach, "aankh" = eyes, "daant" = dental).
-3. **IMAGE AS CONTEXT & FINGER POINTING**: The patient has been instructed to **point their finger** at the area that hurts. **YOU MUST LOOK FOR THEIR FINGER OR HAND POINTING** in the image to determine the exact body part they are referring to. Also use the image to extract visual symptoms like "Red swollen knee", "Skin rash", etc.
-4. **DOCTOR SELECTION**: Pick the BEST doctor name from the "Available Doctors" list whose specialty matches your determined specialty.
-5. **DETECTED SYMPTOMS**: Provide a clear array of 2-3 specific symptoms you detected (e.g. ["Red swollen knee", "Reported pain"] or ["Rash on arm"]).
+3. **FINGER POINTING (CRITICAL)**: The patient has been instructed to **point their finger** at the area that hurts. **YOU MUST LOOK FOR THEIR FINGER OR HAND POINTING** in the image to determine the exact body part they are referring to. This is the most precise visual cue.
+4. **IMAGE CONTEXT**: Also use the image to extract visual symptoms like "Red swollen knee", "Skin rash", etc.
+5. **DOCTOR SELECTION**: Pick the BEST doctor name from the "Available Doctors" list whose specialty matches your determined specialty.
+6. **DETECTED SYMPTOMS**: Provide a clear array of 2-3 specific symptoms you detected (e.g. ["Red swollen knee", "Reported pain"] or ["Rash on arm"]).
 
 ═══════════════ SYMPTOM ID MAPPING (MANDATORY) ════════════════
   "heart"   → Chest, Heart, Palpitations, "dil", "seena" → Specialist: Cardiology
-  "bones"   → Joints, Knee, Back, Broken bone, "haddi", "dard" → Specialist: Orthopedics
+  "bones"   → Joints, Knee, Back, Broken bone, "haddi", "hath", "per" → Specialist: Orthopedics
   "eyes"    → Vision, Redness, Blur, "aankh", "nazar" → Specialist: Ophthalmology
   "dental"  → Mouth, Teeth, Jaw, "daant", "munh" → Specialist: Dentistry
   "ent"     → Ear, Nose, Throat, Hearing, "kaan", "naak", "gala" → Specialist: ENT
@@ -167,7 +168,7 @@ STRICT MULTIMODAL RULES:
 ════════════════════════════════════════════════════════════════
 
 Available doctors (Select one whose specialty matches):
-${input.staffList || "Dr. Brown (Cardiology), Dr. White (Orthopedics), Dr. Anderson (Ophthalmology), Dr. Wilson (Dentistry), Dr. Lee (ENT), Dr. Jones (Gastroenterology), Dr. Smith (Neurology), Dr. Miller (Dermatology), Dr. Taylor (General)"}
+${input.staffList || "Dr. Brown (Cardiology), Dr. Patel (Dermatology), Dr. Singh (Orthopedics), Dr. Reddy (Neurology), Dr. White (Orthopedics), Dr. Anderson (Ophthalmology), Dr. Wilson (Dentistry), Dr. Lee (ENT), Dr. Jones (Gastroenterology), Dr. Taylor (General)"}
 
 PATIENT VOICE NOTE: "${input.voiceTranscript || "No voice note provided."}"
 
@@ -175,8 +176,8 @@ Respond with:
 - symptomId: one of the enum values
 - specialistType: the specialty name
 - predictedDoctorName: the matching doctor's FULL NAME from the list
-- reason: A gentle, comforting 1-sentence explanation in the same language the patient spoke.
-- detectedSymptoms: An array of strings describing the symptoms found.`
+- reason: A gentle, comforting 1-sentence explanation in the same language the patient spoke. 
+- detectedSymptoms: An array of strings describing the symptoms found (e.g. ["Pointing at swollen knee", "Reported pain"]).`
                 },
                 { media: { url: `data:image/jpeg;base64,${input.imageBase64}` } }
             ],

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, Bone, Eye, Thermometer, Smile, Sunrise, Sun, Moon, ArrowLeft, CheckCircle2, Camera, Loader2, Hand, Ear, Activity, Brain, Sparkles, Mic, Volume2 } from "lucide-react";
+import { Heart, Bone, Eye, Thermometer, Smile, Sunrise, Sun, Moon, ArrowLeft, CheckCircle2, Camera, Loader2, Hand, Ear, Activity, Brain, Sparkles, Mic, Square } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { detectBodyPart } from "@/ai/flows/ai-body-part-detection";
@@ -45,7 +45,7 @@ interface ElderAppointmentSelectorProps {
 
 export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }: ElderAppointmentSelectorProps) {
     const { toast } = useToast();
-    const [step, setStep] = useState<1 | 2>(1)
+    const [step, setStep] = useState<1 | 2>(1);
     const [mode, setMode] = useState<"manual" | "camera">("manual");
     const [selectedSymptom, setSelectedSymptom] = useState<string | null>(null);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     const [scanReason, setScanReason] = useState<string | null>(null);
     const [detectedSymptoms, setDetectedSymptoms] = useState<string[] | null>(null);
     
-    // New Multimodal State
+    // Multimodal State
     const [isScanning, setIsScanning] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
@@ -63,6 +63,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const recognitionRef = useRef<any>(null);
+    const stopFlagRef = useRef(false);
 
     useEffect(() => {
         const fetchStaff = async () => {
@@ -82,7 +83,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     useEffect(() => {
         let stream: MediaStream | null = null;
         if (mode === "camera" && step === 1) {
-            navigator.mediaDevices.getUserMedia({ video: true, audio: false }) // Audio access handled by SpeechRecognition
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                 .then(s => {
                     stream = s;
                     if (videoRef.current) videoRef.current.srcObject = s;
@@ -90,7 +91,9 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                 })
                 .catch(() => setCameraError("Camera access denied or not available."));
         }
-        return () => stream?.getTracks().forEach(t => t.stop());
+        return () => {
+            if (stream) stream.getTracks().forEach(t => t.stop());
+        };
     }, [mode, step]);
 
     const activateScanner = () => {
@@ -98,123 +101,118 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         setMode("camera");
     };
 
-    // Combined scan: starts voice recording + captures camera image simultaneously
-    // Voice recording runs for a few seconds, then we capture the image and send both to AI
+    const stopScanning = () => {
+        stopFlagRef.current = true;
+        setIsScanning(false);
+        setIsListening(false);
+        if (recognitionRef.current) {
+            try { recognitionRef.current.stop(); } catch(e) {}
+        }
+    };
+
     const handleCombinedScan = async () => {
         setIsScanning(true);
+        stopFlagRef.current = false;
         setVoiceTranscript("");
 
-        // Prompt user to speak in their language
         const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
         const langMap: Record<string, string> = { English: "en-US", Hindi: "hi-IN", Tamil: "ta-IN", Telugu: "te-IN", Kannada: "kn-IN", Bengali: "bn-IN", Marathi: "mr-IN" };
         const promptMap: Record<string, string> = {
-            English: "Point your finger at where it hurts and tell me",
-            Hindi: "जहां दर्द है वहां उंगली दिखाएं और बताएं",
-            Tamil: "எங்கே வலிக்கிறது என்று விரலைக் காட்டி சொல்லுங்கள்",
-            Telugu: "ఎక్కడ నొప్పిగా ఉందో వేలు చూపించి చెప్పండి",
-            Kannada: "ಎಲ್ಲಿ ನೋವಿದೆ ಎಂದು ಬೆರಳು ತೋರಿಸಿ ಹೇಳಿ",
-            Bengali: "যেখানে ব্যথা সেখানে আঙুল দেখিয়ে বলুন",
-            Marathi: "जिथे दुखतंय तिथे बोट दाखवा आणि सांगा"
+            English: "I'm listening. Point your finger where it hurts and tell me about it.",
+            Hindi: "मैं सुन रहा हूँ। जहां दर्द हो रहा है, वहां उंगली दिखाएं और मुझे बताएं।",
+            Tamil: "நான் கேட்கிறேன். எங்கே வலிக்கிறதோ அங்கே விரலைக் காட்டி எனக்குச் சொல்லுங்கள்.",
+            Telugu: "నేను వింటున్నాను. ఎక్కడ నొప్పిగా ఉందో వేలు చూపించి నాకు చెప్పండి.",
+            Kannada: "ನಾನು ಕೇಳುತ್ತಿದ್ದೇನೆ. ಎಲ್ಲಿ ನೋವಿದೆಯೋ ಅಲ್ಲಿ ಬೆರಳು ತೋರಿಸಿ ನನಗೆ ಹೇಳಿ.",
+            Bengali: "আমি শুনছি। যেখানে ব্যথা করছে সেখানে আঙুল দিয়ে দেখান এবং আমাকে বলুন।",
+            Marathi: "मी ऐकत आहे. जिथे दुखतंय तिथे बोट दाखवा आणि मला सांगा."
         };
         const langCode = langMap[user.language] || "en-US";
         const promptText = promptMap[user.language] || promptMap.English;
 
-        // Step 1: Speak the prompt, then start listening + camera capture together
-        const startCombinedCapture = () => {
+        const startContinuousCapture = async () => {
             let capturedTranscript = "";
-
-            // Start voice recording
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-            let recognitionActive = false;
             
             if (SpeechRecognition) {
                 try {
                     const recognition = new SpeechRecognition();
                     recognition.lang = langCode;
-                    recognition.interimResults = false;
-                    recognition.maxAlternatives = 1;
+                    recognition.interimResults = true;
+                    recognition.continuous = true;
                     recognitionRef.current = recognition;
 
-                    recognition.onstart = () => {
-                        setIsListening(true);
-                        recognitionActive = true;
-                    };
+                    recognition.onstart = () => setIsListening(true);
                     recognition.onresult = (event: any) => {
-                        capturedTranscript = event.results[0][0].transcript;
-                        setVoiceTranscript(capturedTranscript);
-                    };
-                    recognition.onerror = () => {
-                        setIsListening(false);
-                        recognitionActive = false;
-                    };
-                    recognition.onend = () => {
-                        setIsListening(false);
-                        recognitionActive = false;
+                        let currentFinal = "";
+                        for (let i = event.resultIndex; i < event.results.length; ++i) {
+                            if (event.results[i].isFinal) {
+                                currentFinal += event.results[i][0].transcript;
+                            }
+                        }
+                        if (currentFinal) {
+                            setVoiceTranscript(prev => (prev + " " + currentFinal).trim());
+                            capturedTranscript = (capturedTranscript + " " + currentFinal).trim();
+                        }
                     };
                     recognition.start();
                 } catch (e) {
-                    console.warn("Voice recognition failed to start", e);
+                    console.warn("Voice recognition failed", e);
                 }
             }
 
-            // Step 2: After 4 seconds of listening, capture the camera frame and send both to AI
-            setTimeout(async () => {
-                // Stop the voice recording if still active
-                if (recognitionRef.current && recognitionActive) {
-                    try { recognitionRef.current.stop(); } catch {}
-                }
-                setIsListening(false);
-
-                // Capture camera frame
+            while (!stopFlagRef.current) {
+                if (!videoRef.current) break;
+                
                 try {
-                    if (!videoRef.current) throw new Error("Camera not ready");
-
                     const vw = videoRef.current.videoWidth || 640;
                     const vh = videoRef.current.videoHeight || 480;
                     const canvas = document.createElement("canvas");
                     canvas.width = vw;
                     canvas.height = vh;
                     const ctx = canvas.getContext("2d");
-                    if (!ctx) throw new Error("Canvas failed");
-                    ctx.drawImage(videoRef.current, 0, 0, vw, vh);
-                    const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
+                    if (ctx) {
+                        ctx.drawImage(videoRef.current, 0, 0, vw, vh);
+                        const base64Image = canvas.toDataURL("image/jpeg", 0.5).split(",")[1];
+                        
+                        const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
+                        const response = await detectBodyPart({
+                            imageBase64: base64Image,
+                            voiceTranscript: capturedTranscript || "Patient is showing a body part.",
+                            staffList: staffJson
+                        });
 
-                    if (!base64Image || base64Image.length < 100) {
-                        throw new Error("Camera image capture failed — image too small");
+                        if (response.symptomId && response.symptomId !== "fever") {
+                            setPredictedDoctor(response.predictedDoctorName);
+                            setScanReason(response.reason);
+                            if (response.detectedSymptoms) setDetectedSymptoms(response.detectedSymptoms);
+                            setSelectedSymptom(response.symptomId);
+                            toast({ title: "Specialist Found!", description: response.reason });
+                            setIsScanning(false);
+                            if (recognitionRef.current) recognitionRef.current.stop();
+                            setStep(1); // Stay on step 1 to show detection, then it auto-transitions or wait for user
+                            setTimeout(() => setStep(2), 2000);
+                            return;
+                        }
                     }
-
-                    const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
-                    const response = await detectBodyPart({
-                        imageBase64: base64Image,
-                        voiceTranscript: capturedTranscript,
-                        staffList: staffJson
-                    });
-
-                    setPredictedDoctor(response.predictedDoctorName);
-                    setScanReason(response.reason);
-                    if (response.detectedSymptoms) setDetectedSymptoms(response.detectedSymptoms);
-                    toast({ title: "Specialist Found!", description: response.reason });
-                    handleSymptomSelect(response.symptomId);
-                } catch (error) {
-                    console.error("Scan failed:", error);
-                    toast({ variant: "destructive", title: "Scan Failed", description: "Camera could not capture properly. Try manual selection." });
-                } finally {
-                    setIsScanning(false);
-                    setVoiceTranscript("");
+                } catch (e) {
+                    console.error("Loop scan error", e);
                 }
-            }, 4000); // 4 seconds of listening time
+
+                await new Promise(r => setTimeout(r, 4000));
+            }
+
+            setIsScanning(false);
+            setIsListening(false);
         };
 
-        // Speak the prompt first, then start combined capture
         if (window.speechSynthesis) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(promptText);
             utterance.lang = langCode;
-            utterance.rate = 0.85;
-            utterance.onend = () => startCombinedCapture();
+            utterance.onend = () => startContinuousCapture();
             window.speechSynthesis.speak(utterance);
         } else {
-            startCombinedCapture();
+            startContinuousCapture();
         }
     };
 
@@ -345,7 +343,6 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                 )}
                             </div>
                             <div className="flex flex-col gap-4">
-                                {/* Single SCAN button — captures camera + voice simultaneously */}
                                 <Button 
                                     className={cn(
                                         "w-full h-32 text-4xl font-black rounded-[2.5rem] border-[10px] transition-all",
@@ -353,17 +350,16 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                             ? "bg-red-600 border-red-800 text-white animate-pulse"
                                             : "bg-black text-white border-black hover:bg-zinc-800 active:scale-95"
                                     )}
-                                    onClick={handleCombinedScan}
-                                    disabled={isScanning}
+                                    onClick={isScanning ? stopScanning : handleCombinedScan}
                                 >
                                     {isScanning ? (
-                                        <><Mic className="mr-3 h-10 w-10" /> {isListening ? "LISTENING & SCANNING..." : "ANALYZING..."}</>
+                                        <><Square className="mr-3 h-10 w-10 fill-white" /> STOP SCANNING</>
                                     ) : (
-                                        <><Camera className="mr-3 h-10 w-10" /> <Mic className="mr-1 h-8 w-8 opacity-60" /> SCAN</>
+                                        <><Camera className="mr-3 h-10 w-10" /> <Mic className="mr-1 h-8 w-8 opacity-60" /> START SCAN</>
                                     )}
                                 </Button>
                                 <p className="text-center text-lg font-bold text-slate-400">
-                                    Point camera & your finger at pain area — mic listens automatically
+                                    Scanning will continue until you stop or a body part is detected.
                                 </p>
                                 <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
                                 <Button variant="link" className="text-slate-400 font-bold" onClick={() => fileInputRef.current?.click()}>

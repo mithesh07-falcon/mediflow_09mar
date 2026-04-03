@@ -70,6 +70,48 @@
     "qualifications": "MBBS, MD (Pediatrics), DCH"
   },
   {
+    "id": 6,
+    "name": "Dr. Patel",
+    "email": "dr.patel.derm@mediflow.com",
+    "passwordHash": "Derm@2024!",
+    "passwordPlain": "Derm@2024!",
+    "role": "doctor",
+    "specialization": "Dermatology",
+    "isVerified": true,
+    "license": "LIC-DERM-006",
+    "phone": "+91 98765 00006",
+    "experience": "7 years",
+    "qualifications": "MBBS, MD (Dermatology)"
+  },
+  {
+    "id": 7,
+    "name": "Dr. Singh",
+    "email": "dr.singh.ortho@mediflow.com",
+    "passwordHash": "Ortho@2024!",
+    "passwordPlain": "Ortho@2024!",
+    "role": "doctor",
+    "specialization": "Orthopedics",
+    "isVerified": true,
+    "license": "LIC-ORTHO-007",
+    "phone": "+91 98765 00007",
+    "experience": "11 years",
+    "qualifications": "MBBS, MS (Orthopedics)"
+  },
+  {
+    "id": 8,
+    "name": "Dr. Reddy",
+    "email": "dr.reddy.neuro@mediflow.com",
+    "passwordHash": "Neuro@2024!",
+    "passwordPlain": "Neuro@2024!",
+    "role": "doctor",
+    "specialization": "Neurology",
+    "isVerified": true,
+    "license": "LIC-NEURO-008",
+    "phone": "+91 98765 00008",
+    "experience": "13 years",
+    "qualifications": "MBBS, MD (Neurology), DM"
+  },
+  {
     "id": 11,
     "name": "Dr. White",
     "email": "dr.white.ortho@mediflow.com",
