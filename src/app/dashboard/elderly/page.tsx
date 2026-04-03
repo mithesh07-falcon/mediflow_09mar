@@ -525,9 +525,15 @@ export default function ElderlyDashboard() {
 
         <button
           className="w-full aspect-square flex flex-col items-center justify-center bg-white text-black border-[30px] border-orange-500 rounded-[6rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] hover:bg-orange-50 transition-all hover:scale-[1.05] group focus:outline-none"
-          onClick={() => router.push('/dashboard/elderly/checklist')}
+          onClick={() => router.push('/dashboard/elderly/schedule')}
         >
-          <ClipboardList className="w-64 h-64 text-orange-500 group-hover:scale-110 transition-transform" strokeWidth={3} />
+          <div className="relative w-64 h-64 flex items-center justify-center font-black">
+             <Calendar className="h-full w-full text-orange-600 group-hover:scale-110 transition-transform" strokeWidth={3} />
+             <div className="absolute -bottom-4 -right-4 bg-black text-white rounded-full p-4 border-[10px] border-white">
+                <Clock className="h-20 w-20" strokeWidth={4} />
+             </div>
+          </div>
+          <span className="text-4xl font-black uppercase mt-4">What's Next</span>
         </button>
 
         <button
