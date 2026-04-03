@@ -19,6 +19,8 @@ export default function FamilyWalletPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [user, setUser] = useState<any>(null);
 
+  const [showSuccess, setShowSuccess] = useState(false);
+
   useEffect(() => {
     const savedUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
     setUser(savedUser);
@@ -60,10 +62,54 @@ export default function FamilyWalletPage() {
         title: "Recharge Successful! 🎉",
         description: `₹${numAmount} added to the Elder's Family Wallet. Their medicine and bills will be auto-paid.`,
       });
-      setAmount("");
+      // setAmount(""); // Don't clear yet if we show success screen
       setIsProcessing(false);
+      setShowSuccess(true);
     }, 1500);
   };
+
+  if (showSuccess) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
+        <Card className="max-w-xl w-full rounded-[4rem] border-none shadow-2xl bg-white p-2">
+            <CardContent className="p-16 text-center space-y-10">
+                <div className="h-40 w-40 bg-green-100 rounded-full flex items-center justify-center mx-auto border-8 border-white shadow-xl animate-bounce">
+                    <Check className="h-20 w-20 text-green-600" />
+                </div>
+                <div className="space-y-4">
+                    <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter">Recharge Successful!</h2>
+                    <p className="text-xl text-slate-500 font-medium italic">Funds have been added to the shared Family Wallet.</p>
+                </div>
+                
+                <div className="p-10 bg-slate-50 rounded-[3rem] border border-slate-100">
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">Amount Added</p>
+                    <p className="text-7xl font-black text-slate-900">₹{amount}</p>
+                </div>
+
+                <div className="space-y-4">
+                    <Button 
+                        className="w-full h-20 text-2xl font-black rounded-[2rem] bg-black hover:bg-slate-800 transition-all active:scale-95"
+                        onClick={() => router.push('/dashboard/patient')}
+                    >
+                        DONE
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        className="w-full h-16 text-lg font-bold text-slate-400 hover:text-black"
+                        onClick={() => {
+                            setShowSuccess(false);
+                            setAmount("");
+                            setPaymentMethod("");
+                        }}
+                    >
+                        ADD MORE MONEY
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
