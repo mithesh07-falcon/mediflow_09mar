@@ -8,8 +8,10 @@ import { Wallet, Plus, Heart, User, Check, Loader2, Sparkles, AlertCircle } from
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 export default function FamilyWalletPage() {
+  const router = useRouter();
   const { toast } = useToast();
   const [balance, setBalance] = useState(5000); // Default shared balance
   const [amount, setAmount] = useState("");
@@ -21,10 +23,24 @@ export default function FamilyWalletPage() {
     const savedUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
     setUser(savedUser);
     
+    // SECURITY CHECK: Redirect if not a guardian
+    const savedMembers = JSON.parse(localStorage.getItem("mediflow_family_members") || "[]");
+    const currentEmail = savedUser.email || "default";
+    const userMembers = savedMembers.filter((m: any) => m.userId === currentEmail);
+    const hasElderly = userMembers.some((m: any) => 
+      (m.relation === "Grandpa" || m.relation === "Grandma" || m.relation === "Father" || m.relation === "Mother" || m.relation === "Elderly") && 
+      parseInt(m.age) >= 60
+    );
+
+    if (!hasElderly) {
+      router.push("/dashboard/patient");
+      return;
+    }
+    
     // Simulate fetching actual shared wallet balance
     const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
     if (savedBalance) setBalance(parseInt(savedBalance));
-  }, []);
+  }, [router]);
 
   const handleAddMoney = () => {
     const numAmount = parseInt(amount);

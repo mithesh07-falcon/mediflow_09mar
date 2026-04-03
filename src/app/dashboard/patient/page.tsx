@@ -48,6 +48,7 @@ export default function PatientDashboard() {
   const [connectingTele, setConnectingTele] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [walletBalance, setWalletBalance] = useState<number>(5000);
+  const [isGuardian, setIsGuardian] = useState<boolean>(false);
 
   useEffect(() => {
     // --- GLOBAL CLOUD SYNC ---
@@ -80,6 +81,13 @@ export default function PatientDashboard() {
       const allMembers = JSON.parse(saved);
       members = allMembers.filter((m: any) => m.userId === currentEmail);
       
+      // Check if this patient is a guardian
+      const hasElderly = members.some(m => 
+        (m.relation === "Grandpa" || m.relation === "Grandma" || m.relation === "Father" || m.relation === "Mother" || m.relation === "Elderly") && 
+        parseInt(m.age) >= 60
+      );
+      setIsGuardian(hasElderly);
+      
       // Safety fallback if no members exist for this user yet
       if (members.length === 0) {
         const defaultSelf = { id: "1-" + Date.now(), name: user.firstName, relation: "Self", age: user.age || "32", seed: "10", userId: currentEmail };
@@ -93,7 +101,12 @@ export default function PatientDashboard() {
       members = defaultSelf;
       setFamilyMembers(defaultSelf);
       localStorage.setItem("mediflow_family_members", JSON.stringify(defaultSelf));
+      setIsGuardian(false);
     }
+
+    // Sync wallet balance
+    const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
+    if (savedBalance) setWalletBalance(parseInt(savedBalance));
 
     const fetchSecureAppointments = async (membersList: FamilyMember[]) => {
       try {
@@ -311,29 +324,31 @@ export default function PatientDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-[2.5rem] border-none shadow-xl bg-gradient-to-br from-black to-zinc-900 text-white overflow-hidden relative group">
-              <div className="absolute top-0 right-0 p-6 opacity-10">
-                <Wallet className="h-24 w-24 rotate-12" />
-              </div>
-              <CardHeader className="pb-2 relative z-10">
-                <CardTitle className="flex items-center gap-2 text-white text-xl">
-                  <Wallet className="h-6 w-6 text-indigo-400" />
-                  Elder's Wallet
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="relative z-10 pt-4">
-                <div className="mb-6">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Current Balance</p>
-                  <h3 className="text-5xl font-black tracking-tighter">₹{walletBalance.toLocaleString()}</h3>
+            {isGuardian && (
+              <Card className="rounded-[2.5rem] border-none shadow-xl bg-gradient-to-br from-black to-zinc-900 text-white overflow-hidden relative group">
+                <div className="absolute top-0 right-0 p-6 opacity-10">
+                  <Wallet className="h-24 w-24 rotate-12" />
                 </div>
-                <Button 
-                  className="w-full h-14 rounded-2xl bg-white text-black hover:bg-white/90 font-black flex items-center justify-center gap-2 shadow-lg"
-                  onClick={() => router.push('/dashboard/patient/wallet')}
-                >
-                  <PlusCircle className="h-5 w-5" /> RECHARGE
-                </Button>
-              </CardContent>
-            </Card>
+                <CardHeader className="pb-2 relative z-10">
+                  <CardTitle className="flex items-center gap-2 text-white text-xl">
+                    <Wallet className="h-6 w-6 text-indigo-400" />
+                    Elder's Wallet
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="relative z-10 pt-4">
+                  <div className="mb-6">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Current Balance</p>
+                    <h3 className="text-5xl font-black tracking-tighter">₹{walletBalance.toLocaleString()}</h3>
+                  </div>
+                  <Button 
+                    className="w-full h-14 rounded-2xl bg-white text-black hover:bg-white/90 font-black flex items-center justify-center gap-2 shadow-lg"
+                    onClick={() => router.push('/dashboard/patient/wallet')}
+                  >
+                    <PlusCircle className="h-5 w-5" /> RECHARGE
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="bg-red-600 text-white rounded-[2.5rem] shadow-xl overflow-hidden relative group border-none">
               <div className="absolute top-0 right-0 p-8 opacity-10">
