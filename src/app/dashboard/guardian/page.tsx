@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
 import {
     Heart,
     Activity,
@@ -25,6 +26,7 @@ import { Progress } from "@/components/ui/progress";
 import Image from "next/image";
 
 export default function GuardianDashboard() {
+    const router = useRouter();
     const [elderlyUser, setElderlyUser] = useState<any>(null);
     const [healthData, setHealthData] = useState({
         glucose: 142,
@@ -229,7 +231,7 @@ export default function GuardianDashboard() {
                                       </div>
                                   </div>
                                   <button 
-                                      onClick={() => window.location.href = '/dashboard/patient/wallet'}
+                                      onClick={() => router.push('/dashboard/patient/wallet')}
                                       className="w-full h-16 bg-white text-black rounded-2xl font-black flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-sm tracking-tight"
                                   >
                                       <PlusCircle className="h-5 w-5" /> RECHARGE NOW

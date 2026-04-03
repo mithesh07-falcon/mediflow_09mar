@@ -28,8 +28,7 @@ export default function FamilyWalletPage() {
     const currentEmail = savedUser.email || "default";
     const userMembers = savedMembers.filter((m: any) => m.userId === currentEmail);
     const hasElderly = userMembers.some((m: any) => 
-      (m.relation === "Grandpa" || m.relation === "Grandma" || m.relation === "Father" || m.relation === "Mother" || m.relation === "Elderly") && 
-      parseInt(m.age) >= 60
+      (m.relation === "Grandpa" || m.relation === "Grandma" || m.relation === "Father" || m.relation === "Mother" || m.relation === "Elderly" || (m.age && parseInt(m.age) >= 60))
     );
 
     if (!hasElderly) {
