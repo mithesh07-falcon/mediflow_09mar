@@ -197,7 +197,7 @@ export const GlobalSync = {
             const res = await fetch("https://rentry.co/2n4iwexu/raw");
             if (res.ok) {
                 const cloudContent = await res.text();
-                if (cloudContent && cloudContent !== "[]") {
+                if (cloudContent && cloudContent !== "[]" && cloudContent.trim().startsWith('{')) {
                     const cloudJSON = JSON.parse(cloudContent);
                     
                     // Sync prescriptions
