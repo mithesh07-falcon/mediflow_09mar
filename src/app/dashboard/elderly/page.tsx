@@ -283,11 +283,19 @@ export default function ElderlyDashboard() {
       });
     }
 
+    // Sync wallet balance
+    const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
+    if (savedBalance) setWalletBalance(parseInt(savedBalance));
+
     // --- GLOBAL CLOUD SYNC ---
     const runSync = async () => {
        await GlobalSync.pullAppointments();
        await GlobalSync.pullMedicalData();
        await GlobalSync.pullStaff(); // Ensure staff names are available for doctor matching
+       
+       // Re-check balance after potential sync
+       const latestBalance = localStorage.getItem("mediflow_family_wallet_balance");
+       if (latestBalance) setWalletBalance(parseInt(latestBalance));
     };
     runSync();
   }, [router]);
