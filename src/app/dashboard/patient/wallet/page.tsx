@@ -13,6 +13,7 @@ export default function FamilyWalletPage() {
   const { toast } = useToast();
   const [balance, setBalance] = useState(5000); // Default shared balance
   const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [user, setUser] = useState<any>(null);
 
@@ -132,16 +133,35 @@ export default function FamilyWalletPage() {
                         ))}
                     </div>
 
+                    <div className="space-y-4">
+                        <label className="text-sm font-black uppercase tracking-widest text-slate-400">Select Payment Method</label>
+                        <div className="grid grid-cols-3 gap-4">
+                            {['UPI', 'Card', 'Banking'].map((method) => (
+                                <Button
+                                    key={method}
+                                    variant={paymentMethod === method ? "default" : "outline"}
+                                    className={cn(
+                                        "h-16 rounded-2xl text-lg font-black border-2 transition-all",
+                                        paymentMethod === method ? "bg-black text-white border-black" : "border-slate-200"
+                                    )}
+                                    onClick={() => setPaymentMethod(method)}
+                                >
+                                    {method}
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+
                     <Button 
-                        className="w-full h-24 text-3xl font-black rounded-[2rem] shadow-xl shadow-primary/20 flex items-center justify-center gap-4 transition-all active:scale-95"
+                        className="w-full h-24 text-3xl font-black rounded-[2rem] shadow-xl shadow-primary/20 flex items-center justify-center gap-4 transition-all active:scale-95 bg-primary hover:bg-primary/90"
                         onClick={handleAddMoney}
-                        disabled={isProcessing || !amount}
+                        disabled={isProcessing || !amount || !paymentMethod}
                     >
-                        {isProcessing ? <Loader2 className="h-10 w-10 animate-spin" /> : <><Wallet className="h-8 w-8" /> ADD MONEY NOW</>}
+                        {isProcessing ? <Loader2 className="h-10 w-10 animate-spin" /> : <><Wallet className="h-8 w-8" /> RECHARGE NOW</>}
                     </Button>
                 </CardContent>
             </Card>
-          </div>
+        </div>
 
           {/* Security & Info */}
           <div className="lg:col-span-5">

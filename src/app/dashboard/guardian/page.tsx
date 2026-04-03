@@ -16,7 +16,9 @@ import {
     CheckCircle2,
     AlertTriangle,
     User,
-    Utensils
+    Utensils,
+    Wallet,
+    PlusCircle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -42,6 +44,8 @@ export default function GuardianDashboard() {
         { name: "Lunch", time: "01:30 PM", photo: "https://picsum.photos/seed/dal/400/300", dish: "Dal Tadka & Rice" },
     ]);
 
+    const [walletBalance, setWalletBalance] = useState(5000);
+
     useEffect(() => {
         const currentUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
         const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
@@ -59,6 +63,9 @@ export default function GuardianDashboard() {
             // Fallback just in case
             setElderlyUser({ firstName: "Senior User" });
         }
+
+        const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
+        if (savedBalance) setWalletBalance(parseInt(savedBalance));
     }, []);
 
     return (
@@ -210,6 +217,24 @@ export default function GuardianDashboard() {
                                     </div>
                                 </div>
                             </CardContent>
+                        </Card>
+
+                        <Card className="rounded-[2.5rem] border-none shadow-2xl bg-black text-white p-2">
+                             <CardContent className="pt-8 space-y-6">
+                                 <div className="flex items-center gap-4 px-4">
+                                     <Wallet className="h-10 w-10 text-indigo-400" />
+                                     <div>
+                                         <p className="text-[10px] uppercase font-bold text-white/50">Elder's Family Wallet</p>
+                                         <h3 className="text-4xl font-black italic tracking-tighter">₹{walletBalance.toLocaleString()}</h3>
+                                     </div>
+                                 </div>
+                                 <button 
+                                     onClick={() => window.location.href = '/dashboard/patient/wallet'}
+                                     className="w-full h-16 bg-white text-black rounded-2xl font-black flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
+                                 >
+                                     <PlusCircle className="h-5 w-5" /> RECHARGE NOW
+                                 </button>
+                             </CardContent>
                         </Card>
 
                         <Card className="rounded-[2.5rem] border-none shadow-xl bg-white">
