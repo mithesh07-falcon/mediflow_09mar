@@ -60,8 +60,7 @@ export default function GuardianDashboard() {
         if (linkedElderly) {
             setElderlyUser(linkedElderly);
         } else {
-            // Fallback just in case
-            setElderlyUser({ firstName: "Senior User" });
+            setElderlyUser(null);
         }
 
         const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
@@ -219,23 +218,25 @@ export default function GuardianDashboard() {
                             </CardContent>
                         </Card>
 
-                        <Card className="rounded-[2.5rem] border-none shadow-2xl bg-black text-white p-2">
-                             <CardContent className="pt-8 space-y-6">
-                                 <div className="flex items-center gap-4 px-4">
-                                     <Wallet className="h-10 w-10 text-indigo-400" />
-                                     <div>
-                                         <p className="text-[10px] uppercase font-bold text-white/50">Elder's Family Wallet</p>
-                                         <h3 className="text-4xl font-black italic tracking-tighter">₹{walletBalance.toLocaleString()}</h3>
-                                     </div>
-                                 </div>
-                                 <button 
-                                     onClick={() => window.location.href = '/dashboard/patient/wallet'}
-                                     className="w-full h-16 bg-white text-black rounded-2xl font-black flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
-                                 >
-                                     <PlusCircle className="h-5 w-5" /> RECHARGE NOW
-                                 </button>
-                             </CardContent>
-                        </Card>
+                        {elderlyUser && (
+                         <Card className="rounded-[2.5rem] border-none shadow-2xl bg-black text-white p-2">
+                              <CardContent className="pt-8 space-y-6">
+                                  <div className="flex items-center gap-4 px-4">
+                                      <Wallet className="h-10 w-10 text-indigo-400" />
+                                      <div>
+                                          <p className="text-[10px] uppercase font-bold text-white/50 tracking-widest">Elder's Family Wallet</p>
+                                          <h3 className="text-4xl font-black italic tracking-tighter">₹{walletBalance.toLocaleString()}</h3>
+                                      </div>
+                                  </div>
+                                  <button 
+                                      onClick={() => window.location.href = '/dashboard/patient/wallet'}
+                                      className="w-full h-16 bg-white text-black rounded-2xl font-black flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-sm tracking-tight"
+                                  >
+                                      <PlusCircle className="h-5 w-5" /> RECHARGE NOW
+                                  </button>
+                              </CardContent>
+                         </Card>
+                        )}
 
                         <Card className="rounded-[2.5rem] border-none shadow-xl bg-white">
                             <CardHeader className="border-b">
