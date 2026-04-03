@@ -17,7 +17,10 @@ import {
   ClipboardList,
   Activity,
   Utensils,
-  Languages
+  Languages,
+  Calendar,
+  Clock,
+  QrCode
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -544,10 +547,16 @@ export default function ElderlyDashboard() {
         </button>
 
         <button
-          className="w-full aspect-square flex flex-col items-center justify-center bg-white text-black border-[30px] border-yellow-500 rounded-[6rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] hover:bg-yellow-50 transition-all hover:scale-[1.05] group focus:outline-none"
-          onClick={() => router.push('/dashboard/elderly/meals')}
+          className="w-full aspect-square flex flex-col items-center justify-center bg-white text-black border-[30px] border-blue-500 rounded-[6rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] hover:bg-blue-50 transition-all hover:scale-[1.1] group focus:outline-none"
+          onClick={() => router.push('/dashboard/elderly/scan-pay')}
         >
-          <Utensils className="w-64 h-64 text-yellow-600 group-hover:scale-110 transition-transform" strokeWidth={3} />
+          <div className="relative w-72 h-72 flex items-center justify-center font-black">
+             <QrCode className="h-full w-full text-blue-600 group-hover:scale-110 transition-transform" strokeWidth={3} />
+             <div className="absolute -bottom-4 -right-4 bg-black text-white rounded-full p-4 border-[10px] border-white">
+                <Wallet className="h-20 w-20" strokeWidth={4} />
+             </div>
+          </div>
+          <span className="text-6xl font-black uppercase mt-6 tracking-tighter">Scan to Pay</span>
         </button>
 
         <button
