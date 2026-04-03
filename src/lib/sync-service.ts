@@ -112,7 +112,7 @@ export const GlobalSync = {
             console.error("Patient pull failed", e);
         }
         return false;
-    }
+    },
     /**
      * Push APPOINTMENTS registry from local storage to cloud
      */
