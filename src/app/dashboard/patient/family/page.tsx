@@ -19,6 +19,8 @@ import {
   ChevronRight,
   Shield,
   ClipboardList,
+  Wallet,
+  PlusCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -461,6 +463,17 @@ export default function FamilyProfilesPage() {
                         <ChevronRight className="h-4 w-4 ml-auto" />
                       </Button>
                     </Link>
+                    {(member.relation === "Father" || member.relation === "Mother" || member.relation === "Grandpa" || member.relation === "Grandma" || member.relation === "Elderly") && (
+                      <Link href="/dashboard/patient/wallet">
+                        <Button
+                          variant="outline"
+                          className="w-full h-10 rounded-2xl text-sm font-black gap-2 border-primary/20 text-primary hover:bg-primary/5 bg-primary/5"
+                        >
+                          <Wallet className="h-4 w-4" />
+                          Recharge Wallet
+                        </Button>
+                      </Link>
+                    )}
                     <Link href="/dashboard/patient/appointments">
                       <Button
                         variant="outline"
