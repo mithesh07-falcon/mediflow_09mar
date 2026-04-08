@@ -10,11 +10,29 @@ const AIBodyPartDetectionInputSchema = z.object({
 });
 
 const AIBodyPartDetectionOutputSchema = z.object({
+    // --- Compatibility Fields (Keep for existing UI) ---
     symptomId: z.enum(["heart", "bones", "eyes", "fever", "dental", "ent", "stomach", "neuro", "skin"]).describe('The closest matching symptom ID based on the body part detected.'),
     specialistType: z.string().describe('The name of the medical specialty (e.g. Cardiologist).'),
     predictedDoctorName: z.string().describe('The name of the specific doctor suggested from the staff list.'),
     reason: z.string().describe('A simple 1-sentence reason for the detection aimed at an elderly person.'),
-    detectedSymptoms: z.array(z.string()).describe('A list of specific symptoms detected from the image or voice transcript (e.g. ["Redness", "Swelling", "Pain reported"]).'),
+    detectedSymptoms: z.array(z.string()).describe('A list of specific symptoms detected.'),
+
+    // --- New Requested AI Assistant Fields ---
+    final_body_part: z.string(),
+    pain_type: z.string(),
+    severity: z.string(),
+    duration: z.string(),
+    onset: z.string(),
+    triggers: z.string().nullable(),
+    additional_symptoms: z.array(z.string()),
+    risk_level: z.enum(["low", "medium", "high"]),
+    emergency: z.boolean(),
+    recommended_doctor: z.string(),
+    confidence: z.number(),
+    message: z.string(),
+    next_step: z.string(),
+    mismatch: z.boolean().describe('True if the visual pointing does not match the verbal description.'),
+    warning: z.string().default("This is not a medical diagnosis. Please consult a doctor.")
 });
 
 export type AIBodyPartDetectionInput = z.infer<typeof AIBodyPartDetectionInputSchema>;
@@ -127,57 +145,83 @@ function findDoctorForSpec(specKey: string, staffJson?: string): string {
 export async function detectBodyPart(input: AIBodyPartDetectionInput): Promise<AIBodyPartDetectionOutput> {
     const transcript = (input.voiceTranscript || "").toLowerCase();
     
-    // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI) ─────────────────────────
+    // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI quota/errors) ──────────────
     const overrides: Record<string, string[]> = {
-        heart: ["heart", "chest", "dil", "seena", "beats", "palpitation"],
-        bones: ["bone", "joint", "haddi", "knee", "back", "ghutna", "kamar", "muscle", "pain"],
-        eyes: ["eye", "vision", "aankh", "nazar", "chashma", "blur"],
-        dental: ["tooth", "teeth", "gum", "daant", "munh", "jaw"],
-        ent: ["ear", "nose", "throat", "kaan", "naak", "gala", "hearing", "kan"],
-        stomach: ["stomach", "belly", "pait", "gas", "digestion", "acid"],
-        neuro: ["headache", "brain", "sar", "head", "chakkar", "dizzy"],
-        skin: ["skin", "rash", "itch", "chamdi", "khujli", "scar"]
+        heart: ["heart", "chest", "chest pain", "dil", "seena", "beats", "palpitation", "high blood pressure", "heart pain", "cardio", "breathing"],
+        bones: ["bone", "joint", "haddi", "knee", "back", "ghutna", "kamar", "muscle", "pain", "leg pain", "joint pains", "legs", "hands", "walking", "stiff", "arthritis", "fracture", "shoulder", "ortho"],
+        eyes: ["eye", "vision", "aankh", "nazar", "chashma", "blur", "eye pain", "red eye", "sight", "ophthal", "blind", "seeing"],
+        dental: ["tooth", "teeth", "gum", "daant", "munh", "jaw", "toothache", "dentist", "oral", "cavity"],
+        ent: ["ear", "nose", "throat", "kaan", "naak", "gala", "hearing", "kan", "ear pain", "sinus", "nasal", "deaf", "sore throat"],
+        stomach: ["stomach", "belly", "pait", "gas", "digestion", "acid", "stomach pain", "constipation", "diarrhea", "vomit", "ulcer", "gastric"],
+        neuro: ["headache", "brain", "sar", "head", "chakkar", "dizzy", "migraine", "nerve", "numb", "seizure", "shaking", "memory"],
+        skin: ["skin", "rash", "itch", "chamdi", "khujli", "scar", "allergy", "dermat", "pimple", "boil"],
+        fever: ["fever", "cold", "bukhaar", "sardi", "cough", "flu", "tiredness", "weakness", "infection", "medicine", "feverish", "high temperature"]
     };
 
     try {
         const result = await ai.generate({
             prompt: [
                 {
-                    text: `You are an AI medical triage assistant for MediFlow Hospital.
-An elderly patient has provided a voice note and an image. Your goal is to identify 
-the medical concern, extract the explicit symptoms visually from the image or verbally from the voice transcript, and suggest the most relevant specialist.
+                    text: `You are an AI medical assistant designed specifically for elderly users. 
+Your job is NOT to diagnose diseases. 
+Your task is to understand user symptoms, combine it with the detected body part from the image, and provide a structured elderly-friendly response.
 
-STRICT MULTIMODAL RULES:
-1. **VOICE IS PRIORITY**: The voice transcript is the most accurate source of symptoms. If the patient says "my eyes hurt" but shows a generic photo, map to "eyes".
-2. **REGIONAL LANGUAGES**: The patient may speak in Hindi, Telugu, Tamil, Kannada, Bengali, or Marathi. Understand these regional terms (e.g., "dil" = heart, "pait" = stomach, "aankh" = eyes, "daant" = dental).
-3. **FINGER POINTING (CRITICAL)**: The patient has been instructed to **point their finger** at the area that hurts. **YOU MUST LOOK FOR THEIR FINGER OR HAND POINTING** in the image to determine the exact body part they are referring to. This is the most precise visual cue.
-4. **IMAGE CONTEXT**: Also use the image to extract visual symptoms like "Red swollen knee", "Skin rash", etc.
-5. **DOCTOR SELECTION**: Pick the BEST doctor name from the "Available Doctors" list whose specialty matches your determined specialty.
-6. **DETECTED SYMPTOMS**: Provide a clear array of 2-3 specific symptoms you detected (e.g. ["Red swollen knee", "Reported pain"] or ["Rash on arm"]).
+ELDER CONSIDERATIONS:
+- Users may describe symptoms vaguely.
+- Do not assume missing details.
+- If unclear, use "unknown".
+- Use very simple English, short sentences, and a calm tone.
 
-═══════════════ SYMPTOM ID MAPPING (MANDATORY) ════════════════
-  "heart"   → Chest, Heart, Palpitations, "dil", "seena" → Specialist: Cardiology
-  "bones"   → Joints, Knee, Back, Broken bone, "haddi", "hath", "per" → Specialist: Orthopedics
-  "eyes"    → Vision, Redness, Blur, "aankh", "nazar" → Specialist: Ophthalmology
-  "dental"  → Mouth, Teeth, Jaw, "daant", "munh" → Specialist: Dentistry
-  "ent"     → Ear, Nose, Throat, Hearing, "kaan", "naak", "gala" → Specialist: ENT
-  "stomach" → Digestion, Acid, Pain in belly, "pait", "gas" → Specialist: Gastroenterology
-  "neuro"   → Headache, Dizziness, Brain, "sar dard", "chakkar" → Specialist: Neurology
-  "skin"    → Rash, Itching, Scars, "khujli", "chamdi" → Specialist: Dermatology
-  "fever"   → Generic unwell, No specific area, Common cold → Specialist: General
-════════════════════════════════════════════════════════════════
+STEP 1: EXTRACT STRUCTURED SYMPTOMS:
+- body_part (prefer image if conflict)
+- pain_type (sharp, dull, burning, pressure, unknown)
+- severity (mild, moderate, severe, unknown)
+- duration (minutes, hours, days, long-term, unknown)
+- onset (sudden, gradual, unknown)
+- triggers (or null)
+- additional_symptoms (list)
+- risk_flags (chest pain, breathing difficulty, dizziness, bleeding, confusion, weakness)
 
-Available doctors (Select one whose specialty matches):
-${input.staffList || "Dr. Brown (Cardiology), Dr. Patel (Dermatology), Dr. Singh (Orthopedics), Dr. Reddy (Neurology), Dr. White (Orthopedics), Dr. Anderson (Ophthalmology), Dr. Wilson (Dentistry), Dr. Lee (ENT), Dr. Jones (Gastroenterology), Dr. Taylor (General)"}
+STEP 2: DETERMINE RISK LEVEL:
+- HIGH → chest pain, breathing difficulty, fainting, severe symptoms
+- MEDIUM → persistent or moderate symptoms
+- LOW → mild/general symptoms
 
-PATIENT VOICE NOTE: "${input.voiceTranscript || "No voice note provided."}"
+STEP 3: CROSS-VALIDATION (STRICT MATCH):
+Compare the body part pointed at in the image with the body part described in the voice transcript.
+- If the user points to their eye but says "my stomach hurts", set "mismatch": true.
+- If the user points to their chest but says "I have ear pain", set "mismatch": true.
+- If they match or the user doesn't specify a body part verbally, set "mismatch": false.
+- If mismatch is true, your "message" should gently ask the user to clarify or try again because the pointing and description don't match.
+- If mismatch is true, DO NOT stop the scan yet, but tell the user to point clearly.
 
-Respond with:
-- symptomId: one of the enum values
-- specialistType: the specialty name
-- predictedDoctorName: the matching doctor's FULL NAME from the list
-- reason: A gentle, comforting 1-sentence explanation in the same language the patient spoke. 
-- detectedSymptoms: An array of strings describing the symptoms found (e.g. ["Pointing at swollen knee", "Reported pain"]).`
+STEP 4: SUGGEST DOCTOR (ONLY IF NO MISMATCH):
+- heart, chest pain → Cardiologist
+- stomach, stomach pain, digestion → Gastroenterologist
+- bones, joints, leg pain, shoulder pain → Orthopedic
+- head, headache, brain, nerves → Neurologist
+- skin, rash, itching → Dermatologist
+- eyes, vision, eye pain → Ophthalmologist
+- dental, tooth, gum → Dentist
+- ent, ear pain, nose, throat → ENT Specialist
+- fever, cold, cough, general weakness → General Physician
+- CLEAR EMERGENCY (chest pain, breathing) or unclear → General Physician or Emergency
+
+STEP 4: DOCTOR MATCHING (INTERNAL):
+Pick the BEST doctor name from the "Available Doctors" list whose specialty matches your determined specialty.
+- Available Doctors: ${input.staffList || "Dr. Brown (Cardiology), Dr. Patel (Dermatology), Dr. Singh (Orthopedics), Dr. Reddy (Neurology), Dr. White (Orthopedics), Dr. Anderson (Ophthalmology), Dr. Wilson (Dentistry), Dr. Lee (ENT), Dr. Jones (Gastroenterology), Dr. Taylor (General)"}
+
+MAPPING FOR SYSTEM COMPATIBILITY:
+- symptomId: Map the determined body part/specialty to one of: ["heart", "bones", "eyes", "fever", "dental", "ent", "stomach", "neuro", "skin"]
+- specialistType: The determined doctor type
+- predictedDoctorName: The doctor's full name from the list
+- reason: The "message" field you generate
+- detectedSymptoms: The "additional_symptoms" list
+
+INPUT:
+User text: "${input.voiceTranscript || "No description provided."}"
+
+(The user has pointed their finger in the image to show where it hurts.)`
                 },
                 { media: { url: `data:image/jpeg;base64,${input.imageBase64}` } }
             ],
@@ -186,18 +230,15 @@ Respond with:
 
         const output = result.output!;
 
+        // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI) ─────────────────────────
         for (const [id, keys] of Object.entries(overrides)) {
             if (keys.some(k => transcript.includes(k.toLowerCase()))) {
                 if (output.symptomId === "fever" || output.symptomId !== id) {
                     console.log(`[AI:Override] Transcript "${transcript}" triggered ${id} override.`);
                     const entry = BODY_PART_MAP[id as keyof typeof BODY_PART_MAP];
-                    return {
-                        symptomId: entry.symptomId,
-                        specialistType: entry.specialistType,
-                        predictedDoctorName: findDoctorForSpec(entry.specKey, input.staffList),
-                        reason: output.reason || entry.reason,
-                        detectedSymptoms: output.detectedSymptoms?.length > 0 ? output.detectedSymptoms : entry.detectedSymptoms,
-                    };
+                    output.symptomId = entry.symptomId;
+                    output.specialistType = entry.specialistType;
+                    output.predictedDoctorName = findDoctorForSpec(entry.specKey, input.staffList);
                 }
             }
         }
@@ -209,34 +250,38 @@ Respond with:
 
         return output;
 
-    } catch (err) {
-        console.warn("[AI:Fallback] Body part detection AI failed.", err);
-
-        // Even if AI fails entirely, we can still use the transcript to do voice matching!
-        for (const [id, keys] of Object.entries(overrides)) {
-            if (keys.some(k => transcript.includes(k.toLowerCase()))) {
-                console.log(`[AI:Fallback] Voice match found for ${id} without AI.`);
-                const entry = BODY_PART_MAP[id as keyof typeof BODY_PART_MAP];
-                return {
-                    symptomId: entry.symptomId,
-                    specialistType: entry.specialistType,
-                    predictedDoctorName: findDoctorForSpec(entry.specKey, input.staffList),
-                    reason: entry.reason + " (AI unavailable; identified via voice match)",
-                    detectedSymptoms: [`Reported problem in ${id}`],
-                };
-            }
-        }
-
-        const nonFeverKeys = Object.keys(BODY_PART_MAP).filter(k => k !== "fever");
-        const randomKey = nonFeverKeys[Math.floor(Math.random() * nonFeverKeys.length)];
-        const fallback = BODY_PART_MAP[randomKey];
-
+    } catch (err: any) {
+        console.error("CRITICAL: AI body part detection failed.", {
+            message: err?.message,
+            stack: err?.stack,
+            error: err
+        });
+        // Fallback logic remains similar but adapted to the new schema
+        const fallbackId = transcript.includes("chest") ? "heart" : transcript.includes("stomach") ? "stomach" : "fever";
+        const entry = BODY_PART_MAP[fallbackId as keyof typeof BODY_PART_MAP];
+        
         return {
-            symptomId: fallback.symptomId,
-            specialistType: fallback.specialistType,
-            predictedDoctorName: findDoctorForSpec(fallback.specKey, input.staffList),
-            reason: fallback.reason + " (AI was unavailable; please verify manually.)",
-            detectedSymptoms: fallback.detectedSymptoms,
+            symptomId: entry.symptomId,
+            specialistType: entry.specialistType,
+            predictedDoctorName: findDoctorForSpec(entry.specKey, input.staffList),
+            reason: entry.reason + " (AI unavailable)",
+            detectedSymptoms: ["Manual detection"],
+            final_body_part: fallbackId,
+            pain_type: "unknown",
+            severity: "unknown",
+            duration: "unknown",
+            onset: "unknown",
+            triggers: null,
+            additional_symptoms: [],
+            risk_level: "low",
+            emergency: false,
+            recommended_doctor: entry.specialistType,
+            confidence: 0.5,
+            message: entry.reason,
+            next_step: "Please consult a general physician.",
+            mismatch: false,
+            warning: "This is not a medical diagnosis. Please consult a doctor."
         };
     }
 }
+

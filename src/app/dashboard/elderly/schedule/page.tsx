@@ -183,15 +183,14 @@ export default function ElderSchedulePage() {
 
         <div className="space-y-20">
             {['Morning', 'Afternoon', 'Night'].map((time) => {
-                const timeIcon = time === 'Morning' ? Sunrise : time === 'Afternoon' ? Sun : Moon;
+                const TimeIcon = time === 'Morning' ? Sunrise : time === 'Afternoon' ? Sun : Moon;
                 const timeColor = time === 'Morning' ? 'bg-orange-100 text-orange-600' : time === 'Afternoon' ? 'bg-blue-100 text-blue-600' : 'bg-indigo-900 text-white';
                 const medsForTime = meds.filter(m => m.timeLabel === time);
 
                 return (
                     <div key={time} className="space-y-8">
                         <div className={cn("inline-flex items-center gap-6 px-10 py-4 rounded-full border-8 border-black shadow-lg", timeColor)}>
-                            {/* @ts-ignore */}
-                            <timeIcon className="h-12 w-12" />
+                            <TimeIcon className="h-12 w-12" />
                             <span className="text-5xl font-black uppercase">{time}</span>
                         </div>
 

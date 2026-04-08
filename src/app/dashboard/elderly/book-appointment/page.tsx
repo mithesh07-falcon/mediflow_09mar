@@ -222,24 +222,80 @@ export default function BookAppointmentPage() {
                     </div>
 
                     {/* AI Reason Banner */}
-                    {doctorMatch.reason && (
-                        <div className="relative z-10 space-y-4 animate-in fade-in slide-in-from-bottom-5 duration-700">
+                    {(doctorMatch.aiMessage || doctorMatch.reason) && (
+                        <div className="relative z-10 space-y-6 animate-in fade-in slide-in-from-bottom-5 duration-700">
                             <div className="bg-primary/10 border-[6px] border-primary/20 rounded-[3rem] p-10 flex gap-8 items-center">
                                 <div className="h-24 w-24 bg-primary text-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
                                     <Sparkles className="h-12 w-12" />
                                 </div>
-                                <p className="text-4xl font-black text-primary leading-tight lowercase first-letter:uppercase">
-                                    &ldquo;{doctorMatch.reason}&rdquo;
-                                </p>
+                                <div className="space-y-2">
+                                    <p className="text-4xl font-black text-primary leading-tight lowercase first-letter:uppercase">
+                                        &ldquo;{doctorMatch.aiMessage || doctorMatch.reason}&rdquo;
+                                    </p>
+                                    {doctorMatch.nextStep && (
+                                        <p className="text-2xl font-bold text-slate-600 italic">
+                                            Pro-Tip: {doctorMatch.nextStep}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                             
+                            {/* NEW: Triage Results & Risk Level */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className={cn(
+                                    "p-8 rounded-[3rem] border-[6px] flex flex-col justify-center items-center text-center space-y-4",
+                                    doctorMatch.riskLevel === "high" ? "bg-red-50 border-red-200 shadow-[0_0_30px_rgba(239,68,68,0.1)]" : 
+                                    doctorMatch.riskLevel === "medium" ? "bg-orange-50 border-orange-200" : "bg-green-50 border-green-200"
+                                )}>
+                                    <span className={cn(
+                                        "text-2xl font-black uppercase tracking-[0.2em]",
+                                        doctorMatch.riskLevel === "high" ? "text-red-500" : 
+                                        doctorMatch.riskLevel === "medium" ? "text-orange-500" : "text-green-500"
+                                    )}>Risk Level</span>
+                                    <h3 className={cn(
+                                        "text-7xl font-black uppercase tracking-tighter",
+                                        doctorMatch.riskLevel === "high" ? "text-red-700" : 
+                                        doctorMatch.riskLevel === "medium" ? "text-orange-700" : "text-green-700"
+                                    )}>
+                                        {doctorMatch.riskLevel || "Low"}
+                                    </h3>
+                                    {doctorMatch.emergency && (
+                                        <div className="bg-red-600 text-white px-8 py-3 rounded-full text-2xl font-black animate-pulse border-4 border-red-900">
+                                            NEED EMERGENCY CARE!
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="bg-white border-[6px] border-slate-200 rounded-[3rem] p-10 space-y-6">
+                                    <h4 className="text-2xl font-black text-slate-400 uppercase tracking-widest border-b-4 border-slate-100 pb-2">Structured Symptoms</h4>
+                                    <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-bold text-slate-400 uppercase tracking-tighter">Pain Type</p>
+                                            <p className="text-2xl font-black text-black capitalize">{doctorMatch.structuredSymptoms?.painType || "General"}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-bold text-slate-400 uppercase tracking-tighter">Severity</p>
+                                            <p className="text-2xl font-black text-black capitalize">{doctorMatch.structuredSymptoms?.severity || "Mild"}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-bold text-slate-400 uppercase tracking-tighter">Onset</p>
+                                            <p className="text-2xl font-black text-black capitalize">{doctorMatch.structuredSymptoms?.onset || "Gradual"}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-bold text-slate-400 uppercase tracking-tighter">Duration</p>
+                                            <p className="text-2xl font-black text-black capitalize">{doctorMatch.structuredSymptoms?.duration || "Few hours"}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Detected Symptoms Section */}
                             {doctorMatch.detectedSymptoms && doctorMatch.detectedSymptoms.length > 0 && (
                                 <div className="bg-white border-[6px] border-slate-200 rounded-[3rem] p-8 flex flex-wrap gap-4 items-center">
-                                    <span className="text-2xl font-black text-slate-400 uppercase tracking-widest mr-4">Detected:</span>
+                                    <span className="text-2xl font-black text-slate-400 uppercase tracking-widest mr-4">Detected Signs:</span>
                                     {doctorMatch.detectedSymptoms.map((sym, idx) => (
-                                        <div key={idx} className="bg-slate-100 border-[4px] border-slate-200 text-slate-700 px-6 py-3 rounded-full text-2xl font-black flex items-center gap-2">
-                                            <Check className="h-6 w-6 text-green-500" />
+                                        <div key={idx} className="bg-slate-50 border-[4px] border-slate-100 text-slate-700 px-6 py-3 rounded-full text-2xl font-black flex items-center gap-2">
+                                            <div className="h-3 w-3 bg-green-500 rounded-full" />
                                             {sym}
                                         </div>
                                     ))}

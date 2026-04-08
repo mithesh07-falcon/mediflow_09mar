@@ -1,15 +1,17 @@
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 
-const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-
-if (!apiKey && process.env.NODE_ENV === 'production') {
-  console.warn("CRITICAL: AI API Key is missing. Clinical synchronization will fail.");
+console.log("[AI:Init] Initializing Genkit with Google AI...");
+const apiKey = process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+if (!apiKey) {
+    console.error("[AI:Error] NO GOOGLE API KEY FOUND in environment variables!");
+} else {
+    console.log("[AI:Success] Google API Key identified.");
 }
 
 export const ai = genkit({
   plugins: [
-    googleAI({ apiKey: apiKey || 'MISSING_KEY' })
+    googleAI({ apiKey })
   ],
-  model: 'googleai/gemini-1.5-flash-latest',
+  model: 'googleai/gemini-1.5-flash',
 });

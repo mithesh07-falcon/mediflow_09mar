@@ -36,6 +36,19 @@ export interface AppointmentRequest {
     predictedDoctorName?: string;
     reason?: string;
     detectedSymptoms?: string[];
+    // AI Assistant Fields
+    riskLevel?: string;
+    emergency?: boolean;
+    aiMessage?: string;
+    nextStep?: string;
+    structuredSymptoms?: {
+        bodyPart: string;
+        painType: string;
+        severity: string;
+        duration: string;
+        onset: string;
+        triggers: string | null;
+    };
 }
 
 interface ElderAppointmentSelectorProps {
@@ -53,6 +66,11 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     const [predictedDoctor, setPredictedDoctor] = useState<string | null>(null);
     const [scanReason, setScanReason] = useState<string | null>(null);
     const [detectedSymptoms, setDetectedSymptoms] = useState<string[] | null>(null);
+    const [riskLevel, setRiskLevel] = useState<string | null>(null);
+    const [emergency, setEmergency] = useState<boolean>(false);
+    const [aiMessage, setAiMessage] = useState<string | null>(null);
+    const [nextStep, setNextStep] = useState<string | null>(null);
+    const [structuredSymptoms, setStructuredSymptoms] = useState<any | null>(null);
     
     // Multimodal State
     const [isScanning, setIsScanning] = useState(false);
@@ -131,6 +149,8 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
 
         const startContinuousCapture = async () => {
             let capturedTranscript = "";
+            let latestTranscript = ""; // Move declaration here
+            let lastVoiceTime = Date.now();
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
             
             if (SpeechRecognition) {
@@ -143,14 +163,26 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
 
                     recognition.onstart = () => setIsListening(true);
                     recognition.onresult = (event: any) => {
+                        lastVoiceTime = Date.now();
                         let currentFinal = "";
+                        let currentInterim = "";
                         for (let i = event.resultIndex; i < event.results.length; ++i) {
                             if (event.results[i].isFinal) {
                                 currentFinal += event.results[i][0].transcript;
+                            } else {
+                                currentInterim += event.results[i][0].transcript;
                             }
                         }
+                        
+                        // Use both final and interim for real-time responsiveness
+                        const combined = (capturedTranscript + " " + currentFinal + " " + currentInterim).trim();
+                        setVoiceTranscript(combined);
+                        
+                        // Update our local tracking variable for the loop
+                        latestTranscript = combined;
+
+                        // Only "final" committed to the permanent transcript track
                         if (currentFinal) {
-                            setVoiceTranscript(prev => (prev + " " + currentFinal).trim());
                             capturedTranscript = (capturedTranscript + " " + currentFinal).trim();
                         }
                     };
@@ -160,73 +192,118 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                 }
             }
 
-            // Loop every 6 seconds to give AI processing and voice gathering time
+            let lastAiCheck = 0;
+            let isProcessingAi = false;
+            const AI_CHECK_INTERVAL = 8000; // Increased interval for background checks
+
             while (!stopFlagRef.current) {
                 if (!videoRef.current) break;
                 
-                // Allow some time for voice gathering before first AI call
-                if (capturedTranscript.length < 5) {
-                    await new Promise(r => setTimeout(r, 3000));
-                }
+                const now = Date.now();
+                const timeSinceLastVoice = now - lastVoiceTime;
+                const timeSinceLastAi = now - lastAiCheck;
 
-                try {
-                    const canvas = document.createElement("canvas");
-                    canvas.width = videoRef.current.videoWidth || 640;
-                    canvas.height = videoRef.current.videoHeight || 480;
-                    const ctx = canvas.getContext("2d");
-                    if (ctx) {
-                        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                        const base64Image = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
-                        
-                        const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
-                        
-                        // Send current transcript snapshot
-                        const currentTranscriptSnap = capturedTranscript;
-                        
-                        console.log(`[Scan:AI] Analyzing with transcript: "${currentTranscriptSnap}"`);
-                        
-                        const response = await detectBodyPart({
-                            imageBase64: base64Image,
-                            voiceTranscript: currentTranscriptSnap || "Scanning body part pointing...",
-                            staffList: staffJson
-                        });
+                // TRIGGER AI IF:
+                // 1. It's time for a periodic check AND we aren't already processing.
+                // 2. The user has spoken AND there's a 4-second pause.
+                const hasSubstantialText = latestTranscript.length > 3;
+                const pauseDetected = hasSubstantialText && timeSinceLastVoice > 4000;
+                
+                const shouldCheckAi = !isProcessingAi && ((timeSinceLastAi >= AI_CHECK_INTERVAL) || pauseDetected);
 
-                        // Only stop if we found a specific non-general specialty with high confidence
-                        if (response.symptomId && response.symptomId !== "fever" && response.specialistType !== "General Physician" && response.specialistType !== "General") {
-                            setPredictedDoctor(response.predictedDoctorName);
-                            setScanReason(response.reason);
-                            if (response.detectedSymptoms) setDetectedSymptoms(response.detectedSymptoms);
-                            setSelectedSymptom(response.symptomId);
+                if (shouldCheckAi) {
+                    isProcessingAi = true;
+                    lastAiCheck = now;
+                    
+                    // Run AI in a wrapper to avoid blocking the main loop
+                    (async () => {
+                        try {
+                            const canvas = document.createElement("canvas");
+                            canvas.width = videoRef.current!.videoWidth || 640;
+                            canvas.height = videoRef.current!.videoHeight || 480;
+                            const ctx = canvas.getContext("2d");
+                            if (!ctx) { isProcessingAi = false; return; }
                             
-                            toast({ title: "Specialist Identified!", description: response.reason });
+                            ctx.drawImage(videoRef.current!, 0, 0, canvas.width, canvas.height);
+                            const base64Image = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
+                            const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
                             
-                            // Success! Speak result and stop.
-                            if (window.speechSynthesis) {
-                                const successMsg = user.language === "Hindi" 
-                                    ? `हमें मिल गया! आपके लिए ${response.specialistType} विशेषज्ञ ${response.predictedDoctorName} ठीक रहेंगे।`
-                                    : `Found it! ${response.specialistType} specialist ${response.predictedDoctorName} is recommended for you.`;
-                                const successUtterance = new SpeechSynthesisUtterance(successMsg);
-                                successUtterance.lang = langCode;
-                                window.speechSynthesis.speak(successUtterance);
+                            console.log(`[Scan:AI] Analyzing transcript length: ${latestTranscript.length}. Pause detected: ${pauseDetected}`);
+                            
+                            const response = await detectBodyPart({
+                                imageBase64: base64Image,
+                                voiceTranscript: latestTranscript || "Scanning body part pointing...",
+                                staffList: staffJson
+                            });
+
+                            if (response.mismatch) {
+                                toast({ 
+                                    title: "Matching Error", 
+                                    description: response.message,
+                                    variant: "destructive"
+                                });
+                                if (window.speechSynthesis) {
+                                    const utterance = new SpeechSynthesisUtterance(response.message);
+                                    utterance.lang = langCode;
+                                    window.speechSynthesis.speak(utterance);
+                                }
+                                // Do not stop, let user correct. We reset lastAiCheck to prevent spam but isProcessingAi=false allows pause check.
+                                lastAiCheck = Date.now();
+                            } else {
+                                // FINALIZATION logic
+                                const isSpecific = response.symptomId && response.symptomId !== "fever";
+                                const isHighRisk = response.risk_level === "high";
+                                
+                                if (isSpecific || isHighRisk || pauseDetected) {
+                                    stopFlagRef.current = true; // Signal the parent loop to stop
+                                    setPredictedDoctor(response.predictedDoctorName);
+                                    setScanReason(response.reason);
+                                    setRiskLevel(response.risk_level);
+                                    setEmergency(response.emergency);
+                                    setAiMessage(response.message);
+                                    setNextStep(response.next_step);
+                                    setStructuredSymptoms({
+                                        bodyPart: response.final_body_part,
+                                        painType: response.pain_type,
+                                        severity: response.severity,
+                                        duration: response.duration,
+                                        onset: response.onset,
+                                        triggers: response.triggers
+                                    });
+
+                                    if (response.detectedSymptoms) setDetectedSymptoms(response.detectedSymptoms);
+                                    setSelectedSymptom(response.symptomId);
+                                    
+                                    toast({ 
+                                        title: response.emergency ? "EMERGENCY DETECTED" : "Analysis Complete", 
+                                        description: response.reason,
+                                        variant: response.risk_level === "high" ? "destructive" : "default"
+                                    });
+
+                                    if (window.speechSynthesis) {
+                                        const successUtterance = new SpeechSynthesisUtterance(response.message);
+                                        successUtterance.lang = langCode;
+                                        window.speechSynthesis.speak(successUtterance);
+                                    }
+
+                                    setIsScanning(false);
+                                    setIsListening(false);
+                                    if (recognitionRef.current) try { recognitionRef.current.stop(); } catch {}
+                                    
+                                    setStep(1); 
+                                    setTimeout(() => setStep(2), 2500);
+                                    return;
+                                }
                             }
-
-                            setIsScanning(false);
-                            setIsListening(false);
-                            if (recognitionRef.current) try { recognitionRef.current.stop(); } catch {}
-                            
-                            setStep(1); 
-                            setTimeout(() => setStep(2), 2500);
-                            return;
-                        } else {
-                            console.log("[Scan:AI] No specific result yet, continuing...");
+                        } catch (e) {
+                            console.error("AI Analysis Error", e);
+                        } finally {
+                            isProcessingAi = false;
                         }
-                    }
-                } catch (e) {
-                    console.error("Loop scan error", e);
+                    })();
                 }
 
-                // Wait 6 seconds between AI checks to avoid overwhelming and allow voice collection
-                await new Promise(r => setTimeout(r, 6000));
+                await new Promise(r => setTimeout(r, 1000));
             }
 
             setIsScanning(false);
@@ -284,7 +361,12 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
             timePreferenceLabel: timePref.label,
             predictedDoctorName: predictedDoctor || undefined,
             reason: scanReason || undefined,
-            detectedSymptoms: detectedSymptoms || undefined
+            detectedSymptoms: detectedSymptoms || undefined,
+            riskLevel: riskLevel || undefined,
+            emergency: emergency,
+            aiMessage: aiMessage || undefined,
+            nextStep: nextStep || undefined,
+            structuredSymptoms: structuredSymptoms || undefined
         });
     };
 

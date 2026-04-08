@@ -24,15 +24,18 @@ export function AIDoctorRecommender() {
   // Visual Scanning State
   const [mode, setMode] = useState<"text" | "scan">("text");
   const [isScanning, setIsScanning] = useState(false);
-  const [videoRef] = [useRef<HTMLVideoElement>(null)];
-  const [recognitionRef] = [useRef<any>(null)];
-  const [stopFlagRef] = [useRef(false)];
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const stopFlagRef = useRef(false);
   const [detectedSymptoms, setDetectedSymptoms] = useState<string[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-    if (user.language) setUserLang(user.language);
+    const userStr = localStorage.getItem("mediflow_current_user");
+    if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.language) setUserLang(user.language);
+    }
 
     const fetchStaff = async () => {
       try {
@@ -67,6 +70,13 @@ export function AIDoctorRecommender() {
     return map[lang] || "en-US";
   };
 
+  const stopScanning = () => {
+    stopFlagRef.current = true;
+    setIsScanning(false);
+    setIsListening(false);
+    if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
+  };
+
   const startScanning = async () => {
     setIsScanning(true);
     stopFlagRef.current = false;
@@ -92,67 +102,85 @@ export function AIDoctorRecommender() {
     }
 
     // Capture loop
+    let isAnalyzing = false;
     while (!stopFlagRef.current) {
       if (!videoRef.current) break;
       
-      // Gathering voice for a bit before first AI check
-      if (symptoms.length < 5) {
-        await new Promise(r => setTimeout(r, 3000));
+      // Minimum voice needed to start AI
+      if (symptoms.length < 3) {
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
       }
 
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = videoRef.current.videoWidth || 640;
-        canvas.height = videoRef.current.videoHeight || 480;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          const base64 = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
-          const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
-          
-          const transcriptSnap = symptoms;
-          
-          const aiRes = await detectBodyPart({
-            imageBase64: base64,
-            voiceTranscript: transcriptSnap || "Scanning body part",
-            staffList: staffJson
-          });
+      if (isAnalyzing) {
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
 
-          // Strict validation: Must not be fever/general to auto-stop
-          if (aiRes.symptomId && aiRes.symptomId !== "fever" && aiRes.specialistType !== "General Physician" && aiRes.specialistType !== "General") {
-            setResult({ recommendedSpecialist: aiRes.specialistType, reason: aiRes.reason });
-            if (aiRes.detectedSymptoms) setDetectedSymptoms(aiRes.detectedSymptoms);
-            if (aiRes.predictedDoctorName) {
-              (result as any).predictedDoctorName = aiRes.predictedDoctorName;
-            }
+      isAnalyzing = true;
+      (async () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = videoRef.current?.videoWidth || 640;
+          canvas.height = videoRef.current?.videoHeight || 480;
+          const ctx = canvas.getContext("2d");
+          if (ctx && videoRef.current) {
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            const base64 = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
+            const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
             
-            toast({ title: "Specialist Found!", description: aiRes.reason });
+            const aiRes = await detectBodyPart({
+              imageBase64: base64,
+              voiceTranscript: symptoms || "Scanning body part",
+              staffList: staffJson
+            });
 
-            if (window.speechSynthesis) {
+            if (aiRes.mismatch) {
+              toast({ 
+                  title: "Matching Error", 
+                  description: aiRes.message,
+                  variant: "destructive"
+              });
+              if (window.speechSynthesis) {
+                  const utterance = new SpeechSynthesisUtterance(aiRes.message);
+                  utterance.lang = getLangCode(userLang);
+                  window.speechSynthesis.speak(utterance);
+              }
+            } else if (aiRes.symptomId && aiRes.symptomId !== "fever" && aiRes.specialistType !== "General Physician" && aiRes.specialistType !== "General") {
+              setResult({ 
+                  recommendedSpecialist: aiRes.specialistType, 
+                  reason: aiRes.reason,
+                  risk_level: aiRes.risk_level,
+                  emergency: aiRes.emergency,
+                  detectedSymptoms: aiRes.detectedSymptoms,
+                  next_step: aiRes.next_step,
+                  suggestedAction: aiRes.message
+              } as any);
+              if (aiRes.detectedSymptoms) setDetectedSymptoms(aiRes.detectedSymptoms);
+              
+              toast({ title: "Specialist Found!", description: aiRes.reason });
+
+              if (window.speechSynthesis) {
                 const msg = userLang === "Hindi" 
-                    ? `हमें मिल गया! आपके लिए ${aiRes.specialistType} विशेषज्ञ ${aiRes.predictedDoctorName} सही रहेंगे।`
-                    : `Specialist found! We recommend ${aiRes.predictedDoctorName} for ${aiRes.specialistType}.`;
+                    ? `विशेषज्ञ मिल गया! हमने ${aiRes.specialistType} का सुझाव दिया है।`
+                    : `Specialist found! We recommend ${aiRes.specialistType}.`;
                 const utterance = new SpeechSynthesisUtterance(msg);
                 utterance.lang = getLangCode(userLang);
                 window.speechSynthesis.speak(utterance);
+              }
+
+              stopScanning();
             }
-
-            stopScanning();
-            return;
           }
+        } catch (e) {
+          console.error("Scanning error", e);
+        } finally {
+          isAnalyzing = false;
         }
-      } catch (e) {}
-      
-      // Wait 6 seconds between AI checks
-      await new Promise(r => setTimeout(r, 6000));
-    }
-  };
+      })();
 
-  const stopScanning = () => {
-    stopFlagRef.current = true;
-    setIsScanning(false);
-    setIsListening(false);
-    if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
+      await new Promise(r => setTimeout(r, 5000));
+    }
   };
 
   const handleRecommendation = async () => {
@@ -174,7 +202,6 @@ export function AIDoctorRecommender() {
       localStorage.setItem("mediflow_last_symptom_analysis", JSON.stringify({
         specialist: result.recommendedSpecialist,
         description: symptoms,
-        predictedDoctorName: (result as any).predictedDoctorName
       }));
       router.push("/dashboard/patient/appointments");
     }

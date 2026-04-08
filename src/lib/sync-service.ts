@@ -4,6 +4,7 @@
  * 
  * Provides global persistence across devices for the mock-registry
  * when deployed to serverless environments like Vercel.
+ * Uses a Proxy route to avoid CORS errors.
  */
 
 // Global registry codes (hidden from casual users but accessible for sync)
@@ -18,9 +19,8 @@ export const GlobalSync = {
     async pushStaff() {
         try {
             const data = localStorage.getItem("mediflow_staff") || "[]";
-            const res = await fetch(STAFF_URL, {
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent(STAFF_URL)}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams({
                     text: data,
                     edit_code: EDIT_CODE
@@ -38,10 +38,10 @@ export const GlobalSync = {
      */
     async pullStaff() {
         try {
-            const res = await fetch("https://rentry.co/mediflow-staff-777/raw");
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/mediflow-staff-777/raw")}`);
             if (res.ok) {
                 const cloudData = await res.text();
-                if (cloudData && cloudData !== "[]") {
+                if (cloudData && cloudData !== "[]" && cloudData.trim().startsWith('[')) {
                     const localData = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
                     const cloudJSON = JSON.parse(cloudData);
                     
@@ -69,9 +69,8 @@ export const GlobalSync = {
     async pushPatients() {
         try {
             const data = localStorage.getItem("mediflow_patients") || "[]";
-            const res = await fetch(PATIENT_URL, {
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent(PATIENT_URL)}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams({
                     text: data,
                     edit_code: EDIT_CODE
@@ -89,10 +88,10 @@ export const GlobalSync = {
      */
     async pullPatients() {
         try {
-            const res = await fetch("https://rentry.co/mediflow-patients-777/raw");
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/mediflow-patients-777/raw")}`);
             if (res.ok) {
                 const cloudData = await res.text();
-                if (cloudData && cloudData !== "[]") {
+                if (cloudData && cloudData !== "[]" && cloudData.trim().startsWith('[')) {
                     const localData = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
                     const cloudJSON = JSON.parse(cloudData);
                     
@@ -119,9 +118,8 @@ export const GlobalSync = {
     async pushAppointments() {
         try {
             const data = localStorage.getItem("mediflow_appointments") || "[]";
-            const res = await fetch("https://rentry.co/api/edit/9gvymvvp2", {
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/api/edit/9gvymvvp2")}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams({
                     text: data,
                     edit_code: EDIT_CODE
@@ -139,10 +137,10 @@ export const GlobalSync = {
      */
     async pullAppointments() {
         try {
-            const res = await fetch("https://rentry.co/9gvymvvp2/raw");
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/9gvymvvp2/raw")}`);
             if (res.ok) {
                 const cloudData = await res.text();
-                if (cloudData && cloudData !== "[]") {
+                if (cloudData && cloudData !== "[]" && cloudData.trim().startsWith('[')) {
                     const localData = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
                     const cloudJSON = JSON.parse(cloudData);
                     
@@ -179,9 +177,8 @@ export const GlobalSync = {
             const history = localStorage.getItem("mediflow_medical_history") || "[]";
             const data = JSON.stringify({ rx: JSON.parse(rx), history: JSON.parse(history) });
             
-            await fetch("https://rentry.co/api/edit/2n4iwexu", {
+            await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/api/edit/2n4iwexu")}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams({ text: data, edit_code: EDIT_CODE })
             });
         } catch (e) {
@@ -194,7 +191,7 @@ export const GlobalSync = {
      */
     async pullMedicalData() {
         try {
-            const res = await fetch("https://rentry.co/2n4iwexu/raw");
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/2n4iwexu/raw")}`);
             if (res.ok) {
                 const cloudContent = await res.text();
                 if (cloudContent && cloudContent !== "[]" && cloudContent.trim().startsWith('{')) {
@@ -207,7 +204,7 @@ export const GlobalSync = {
                         if (!mergedRx.find(lrx => String(lrx.id) === String(crx.id))) mergedRx.push(crx);
                     });
                     localStorage.setItem("mediflow_prescriptions", JSON.stringify(mergedRx));
-
+ 
                     // Sync history
                     const localHist = JSON.parse(localStorage.getItem("mediflow_medical_history") || "[]");
                     const mergedHist = [...localHist];
