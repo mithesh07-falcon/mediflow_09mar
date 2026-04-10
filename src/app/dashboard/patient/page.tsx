@@ -308,9 +308,9 @@ export default function PatientDashboard() {
                     <Button
                       variant="outline"
                       className="rounded-xl group"
-                      onClick={() => router.push('/dashboard/patient/certificates')}
+                      onClick={() => router.push('/dashboard/patient/medication-report')}
                     >
-                      Certificates <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                      Medication Report <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
                     </Button>
                   </div>
                 </CardContent>
