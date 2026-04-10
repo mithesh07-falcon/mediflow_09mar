@@ -13,7 +13,7 @@ const SYMPTOMS_MAP = [
     { id: "heart", label: "Heart & Chest", icon: Heart, specialist: "Cardiology", color: "text-red-500", border: "border-red-200", bg: "bg-red-50" },
     { id: "bones", label: "Bones & Joints", icon: Bone, specialist: "Orthopedics", color: "text-orange-500", border: "border-orange-200", bg: "bg-orange-50" },
     { id: "eyes", label: "Eyes & Vision", icon: Eye, specialist: "Ophthalmology", color: "text-blue-500", border: "border-blue-200", bg: "bg-blue-50" },
-    { id: "fever", label: "Fever & General", icon: Thermometer, specialist: "General", color: "text-green-500", border: "border-green-200", bg: "bg-green-50" },
+    { id: "fever", label: "Fever & General", icon: Thermometer, specialist: "General Medicine", color: "text-green-500", border: "border-green-200", bg: "bg-green-50" },
     { id: "dental", label: "Teeth & Mouth", icon: Smile, specialist: "Dentistry", color: "text-purple-500", border: "border-purple-200", bg: "bg-purple-50" },
     { id: "ent", label: "Ear, Nose, Throat", icon: Ear, specialist: "ENT", color: "text-yellow-500", border: "border-yellow-200", bg: "bg-yellow-50" },
     { id: "stomach", label: "Stomach/Belly", icon: Activity, specialist: "Gastroenterology", color: "text-amber-500", border: "border-amber-200", bg: "bg-amber-50" },
@@ -64,6 +64,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [staff, setStaff] = useState<any[]>([]);
     const [predictedDoctor, setPredictedDoctor] = useState<string | null>(null);
+    const [aiSpecialist, setAiSpecialist] = useState<string | null>(null);
     const [scanReason, setScanReason] = useState<string | null>(null);
     const [detectedSymptoms, setDetectedSymptoms] = useState<string[] | null>(null);
     const [riskLevel, setRiskLevel] = useState<string | null>(null);
@@ -251,12 +252,16 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                 lastAiCheck = Date.now();
                             } else {
                                 // FINALIZATION logic
-                                const isSpecific = response.symptomId && response.symptomId !== "fever";
+                                const confidence = Number.isFinite(response.confidence) ? response.confidence : 0.5;
+                                const isSpecific = !!response.symptomId && response.symptomId !== "fever";
                                 const isHighRisk = response.risk_level === "high";
+                                const isGeneral = response.symptomId === "fever" || /general/i.test(response.specialistType || "");
+                                const shouldFinalize = isHighRisk || (isSpecific && confidence >= 0.6) || (pauseDetected && !isGeneral && confidence >= 0.75);
                                 
-                                if (isSpecific || isHighRisk || pauseDetected) {
+                                if (shouldFinalize) {
                                     stopFlagRef.current = true; // Signal the parent loop to stop
                                     setPredictedDoctor(response.predictedDoctorName);
+                                    setAiSpecialist(response.specialistType || null);
                                     setScanReason(response.reason);
                                     setRiskLevel(response.risk_level);
                                     setEmergency(response.emergency);
@@ -329,8 +334,14 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         reader.onload = async (e) => {
             try {
                 const base64Image = (e.target?.result as string).split(",")[1];
-                const response = await detectBodyPart({ imageBase64: base64Image, voiceTranscript: voiceTranscript });
+                const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
+                const response = await detectBodyPart({
+                    imageBase64: base64Image,
+                    voiceTranscript: voiceTranscript || "Uploaded symptom photo",
+                    staffList: staffJson
+                });
                 setPredictedDoctor(response.predictedDoctorName);
+                setAiSpecialist(response.specialistType || null);
                 setScanReason(response.reason);
                 if (response.detectedSymptoms) setDetectedSymptoms(response.detectedSymptoms);
                 handleSymptomSelect(response.symptomId);
@@ -356,7 +367,7 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         onSearchDoctors({
             symptomId: symptom.id,
             symptomLabel: symptom.label,
-            specialist: symptom.specialist,
+            specialist: aiSpecialist || symptom.specialist,
             timePreferenceCode: timePref.id,
             timePreferenceLabel: timePref.label,
             predictedDoctorName: predictedDoctor || undefined,
@@ -412,7 +423,10 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                 return (
                                     <button 
                                         key={s.id} 
-                                        onClick={() => handleSymptomSelect(s.id)}
+                                        onClick={() => {
+                                            setAiSpecialist(null);
+                                            handleSymptomSelect(s.id);
+                                        }}
                                         className={cn("flex flex-col items-center p-6 rounded-[2rem] border-4 transition-all", isSelected ? `border-primary ${s.bg}` : "border-slate-100 bg-white")}
                                     >
                                         <Icon className={cn("w-12 h-12 mb-2", s.color)} />

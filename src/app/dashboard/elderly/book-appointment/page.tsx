@@ -28,7 +28,22 @@ import {
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { ElderAppointmentSelector, AppointmentRequest } from "@/components/elderly/ElderAppointmentSelector";
-import { detectBodyPart } from "@/ai/flows/ai-body-part-detection";
+
+const normalizeSpecialization = (value: string) => {
+    const v = (value || "").toLowerCase().trim();
+
+    if (["cardiology", "cardiologist", "heart"].some(k => v === k || v.includes(k))) return "cardiology";
+    if (["orthopedics", "orthopedic", "orthopedic surgeon", "ortho", "bone", "joint"].some(k => v === k || v.includes(k))) return "orthopedics";
+    if (["ophthalmology", "ophthalmologist", "eye", "vision"].some(k => v === k || v.includes(k))) return "ophthalmology";
+    if (["dentistry", "dentist", "dental"].some(k => v === k || v.includes(k))) return "dentistry";
+    if (["ent", "ear nose throat"].some(k => v === k || v.includes(k))) return "ent";
+    if (["gastroenterology", "gastro", "digestive", "stomach"].some(k => v === k || v.includes(k))) return "gastroenterology";
+    if (["neurology", "neurologist", "brain", "nerve"].some(k => v === k || v.includes(k))) return "neurology";
+    if (["dermatology", "dermatologist", "skin"].some(k => v === k || v.includes(k))) return "dermatology";
+    if (["general", "general medicine", "general physician", "physician"].some(k => v === k || v.includes(k))) return "general";
+
+    return v;
+};
 
 export default function BookAppointmentPage() {
     const router = useRouter();
@@ -69,28 +84,31 @@ export default function BookAppointmentPage() {
     }, [router]);
 
     const getDoctorForSpecialist = (specialist: string, predictedName?: string) => {
-        if (predictedName && staff.some(s => s.name === predictedName)) {
-            return predictedName;
+        const doctors = staff.filter(s => String(s.role || "").toLowerCase() === "doctor");
+        if (doctors.length === 0) return "DR. ROBERT (GENERAL)";
+
+        const normalizedPredicted = (predictedName || "").trim().toLowerCase();
+        if (normalizedPredicted) {
+            const byName = doctors.find(s => String(s.name || "").trim().toLowerCase() === normalizedPredicted);
+            if (byName) return byName.name;
         }
 
-        const specLower = specialist?.toLowerCase().trim();
-        console.log(`[Lookup] Searching for: ${specialist}. Predicted: ${predictedName}`);
+        const target = normalizeSpecialization(specialist);
+        console.log(`[Lookup] Searching for specialist=${specialist} (normalized=${target}). Predicted=${predictedName || "none"}`);
 
-        const match = staff.find(s =>
-            s.role === 'doctor' &&
-            s.specialization?.toLowerCase().trim() === specLower
-        );
+        const exact = doctors.find(s => normalizeSpecialization(String(s.specialization || "")) === target);
+        if (exact) return exact.name;
 
-        if (match) return match.name;
+        const partial = doctors.find(s => {
+            const normalizedSpec = normalizeSpecialization(String(s.specialization || ""));
+            return normalizedSpec.includes(target) || target.includes(normalizedSpec);
+        });
+        if (partial) return partial.name;
 
-        // Second pass: partial match
-        const partialMatch = staff.find(s =>
-            s.role === 'doctor' &&
-            s.specialization?.toLowerCase().includes(specLower || "")
-        );
-        if (partialMatch) return partialMatch.name;
+        const general = doctors.find(s => normalizeSpecialization(String(s.specialization || "")) === "general");
+        if (general) return general.name;
 
-        return staff.find(s => s.role === 'doctor')?.name || "DR. ROBERT (GENERAL)";
+        return doctors[0].name || "DR. ROBERT (GENERAL)";
     };
 
     const getAppointmentTime = (timePref: string) => {
@@ -119,7 +137,10 @@ export default function BookAppointmentPage() {
             // We need the doctor email for the doctor dashboard to filter
             // Let's assume the name mapping is consistent or match by name
             const allStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
-            const doctorObj = allStaff.find((s: any) => s.name === doctorName);
+            const doctorObj = [...staff, ...allStaff].find((s: any) =>
+                String(s.role || "").toLowerCase() === "doctor" &&
+                String(s.name || "").trim().toLowerCase() === String(doctorName || "").trim().toLowerCase()
+            );
 
             const newAppt = {
                 id: Date.now(),
