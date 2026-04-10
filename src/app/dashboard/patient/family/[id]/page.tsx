@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, use } from "react";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -71,8 +71,10 @@ const RECORD_CATEGORIES = [
 export default function FamilyMemberProfilePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const unwrappedParams = use(params);
+  const id = unwrappedParams.id;
   const router = useRouter();
   const { toast } = useToast();
   const [member, setMember] = useState<any>(null);
@@ -102,7 +104,7 @@ export default function FamilyMemberProfilePage({
     if (saved) {
       const parsedMembers = JSON.parse(saved);
       // Ensure the member belongs to the logged-in user securely
-      const found = parsedMembers.find((m: any) => m.id === params.id && m.userId === currentEmail);
+      const found = parsedMembers.find((m: any) => m.id === id && m.userId === currentEmail);
       if (found) {
         setMember(found);
       } else {
@@ -114,12 +116,12 @@ export default function FamilyMemberProfilePage({
 
     // 2. Get Manual Records
     const savedManual = localStorage.getItem(
-      `mediflow_health_records_${params.id}`
+      `mediflow_health_records_${id}`
     );
     if (savedManual) {
       setManualRecords(JSON.parse(savedManual));
     }
-  }, [params.id, router]);
+  }, [id, router]);
 
   // Filter appointments based on the loaded member name
   useEffect(() => {
@@ -179,7 +181,7 @@ export default function FamilyMemberProfilePage({
     const updated = [newRecord, ...manualRecords];
     setManualRecords(updated);
     localStorage.setItem(
-      `mediflow_health_records_${params.id}`,
+      `mediflow_health_records_${id}`,
       JSON.stringify(updated)
     );
 
@@ -199,7 +201,7 @@ export default function FamilyMemberProfilePage({
     const updated = manualRecords.filter((r) => r.id !== recordId);
     setManualRecords(updated);
     localStorage.setItem(
-      `mediflow_health_records_${params.id}`,
+      `mediflow_health_records_${id}`,
       JSON.stringify(updated)
     );
     toast({

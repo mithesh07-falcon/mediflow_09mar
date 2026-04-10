@@ -39,9 +39,10 @@ interface MedicationItem {
    duration: string;
    courseDays: number;
    courseEndDate: string;
-   timeLabel: "Morning" | "Afternoon" | "Evening" | "Night";
+   timeLabel: string;
    scheduledHour: number;
    scheduledMinute: number;
+   isCustomTime?: boolean;
 }
 
 interface MedTimeSlot {
@@ -126,13 +127,18 @@ export default function DiagnosisPage() {
    const updateMed = (id: string, field: keyof MedicationItem, value: any) => {
       setMeds(meds.map(m => {
          if (m.id === id) {
-            const updated = { ...m, [field]: value };
+            let updated = { ...m, [field]: value };
             if (field === 'timeLabel') {
-               // Find the matching slot from admin-configured slots
-               const slot = medTimeSlots.find(s => s.label === value);
-               if (slot) {
-                  updated.scheduledHour = slot.hour;
-                  updated.scheduledMinute = slot.minute;
+               if (value === 'Custom') {
+                  updated.isCustomTime = true;
+               } else {
+                  updated.isCustomTime = false;
+                  // Find the matching slot from admin-configured slots
+                  const slot = medTimeSlots.find(s => s.label === value);
+                  if (slot) {
+                     updated.scheduledHour = slot.hour;
+                     updated.scheduledMinute = slot.minute;
+                  }
                }
             }
             if (field === 'courseDays') {
@@ -329,18 +335,35 @@ export default function DiagnosisPage() {
                                     </div>
                                     <div className="col-span-3 space-y-1">
                                        <Label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Time Slot</Label>
-                                       <Select value={med.timeLabel} onValueChange={v => updateMed(med.id, 'timeLabel', v)}>
-                                          <SelectTrigger className="h-12 rounded-xl border-2">
-                                             <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent className="rounded-xl">
-                                             {medTimeSlots.map(slot => (
-                                                <SelectItem key={slot.label} value={slot.label}>
-                                                   {slot.display}
-                                                </SelectItem>
-                                             ))}
-                                          </SelectContent>
-                                       </Select>
+                                       <div className="space-y-2">
+                                          <Select value={med.timeLabel} onValueChange={v => updateMed(med.id, 'timeLabel', v)}>
+                                             <SelectTrigger className="h-12 rounded-xl border-2">
+                                                <SelectValue />
+                                             </SelectTrigger>
+                                             <SelectContent className="rounded-xl">
+                                                {medTimeSlots.map(slot => (
+                                                   <SelectItem key={slot.label} value={slot.label}>
+                                                      {slot.display}
+                                                   </SelectItem>
+                                                ))}
+                                                <SelectItem value="Custom">✨ Custom Time...</SelectItem>
+                                             </SelectContent>
+                                          </Select>
+                                          {med.isCustomTime && (
+                                             <div className="flex gap-2 items-center animate-in fade-in slide-in-from-top-1">
+                                                <Clock className="h-4 w-4 text-primary" />
+                                                <Input
+                                                   type="time"
+                                                   className="h-9 rounded-lg border-2 text-xs font-bold"
+                                                   value={`${String(med.scheduledHour).padStart(2, '0')}:${String(med.scheduledMinute).padStart(2, '0')}`}
+                                                   onChange={(e) => {
+                                                      const [h, m] = e.target.value.split(':');
+                                                      setMeds(prev => prev.map(p => p.id === med.id ? { ...p, scheduledHour: parseInt(h), scheduledMinute: parseInt(m) } : p));
+                                                   }}
+                                                />
+                                             </div>
+                                          )}
+                                       </div>
                                     </div>
                                     <div className="col-span-3 space-y-1">
                                        <Label className="text-[10px] uppercase font-bold text-slate-500 ml-1 flex items-center gap-1">
