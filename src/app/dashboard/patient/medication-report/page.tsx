@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GlobalSync } from "@/lib/sync-service";
+import { downloadMedicationReportPdf } from "@/lib/report-pdf";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,16 +38,6 @@ function safeParseArray<T = any>(key: string): T[] {
   } catch {
     return [];
   }
-}
-
-function createDownload(content: string, filename: string) {
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export default function PatientMedicationReportPage() {
@@ -131,23 +122,16 @@ export default function PatientMedicationReportPage() {
   );
 
   const downloadReport = (report: PrescriptionRecord) => {
-    const lines = [
-      `MediFlow Medication Report`,
-      `Report ID: ${report.id}`,
-      `Patient: ${report.patientName}`,
-      `Doctor: ${report.doctorName} (${report.doctorSpecialization})`,
-      `Date: ${report.date}`,
-      `Diagnosis Notes: ${report.notes}`,
-      "",
-      "Medications:",
-      ...(report.medications.length > 0
-        ? report.medications.map((m, idx) =>
-            `${idx + 1}. ${m.name || "Unnamed"} | ${m.dosage || "-"} | ${m.duration || "As prescribed"} | ${m.timeLabel || "Not set"}`
-          )
-        : ["No medications listed."]),
-    ].join("\n");
-
-    createDownload(lines, `${report.id}-medication-report.txt`);
+    downloadMedicationReportPdf({
+      title: "Medical Report",
+      reportId: report.id,
+      patientName: report.patientName,
+      doctorLine: `Dr. ${report.doctorName} (${report.doctorSpecialization})`,
+      date: report.date,
+      notes: report.notes,
+      medications: report.medications,
+      fileName: `${report.id}-medication-report.pdf`,
+    });
   };
 
   return (
@@ -228,7 +212,7 @@ export default function PatientMedicationReportPage() {
                     <p className="text-xs text-muted-foreground">{report.date}</p>
                   </div>
                   <Button className="rounded-xl" onClick={() => downloadReport(report)}>
-                    <Download className="h-4 w-4 mr-2" /> Download
+                    <Download className="h-4 w-4 mr-2" /> Download PDF
                   </Button>
                 </div>
               ))
