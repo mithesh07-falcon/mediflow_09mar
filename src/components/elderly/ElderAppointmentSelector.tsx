@@ -156,47 +156,73 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
             
             if (SpeechRecognition) {
-                try {
-                    const recognition = new SpeechRecognition();
-                    recognition.lang = langCode;
-                    recognition.interimResults = true;
-                    recognition.continuous = true;
-                    recognitionRef.current = recognition;
+                const startRecognition = () => {
+                    try {
+                        const recognition = new SpeechRecognition();
+                        recognition.lang = langCode;
+                        recognition.interimResults = true;
+                        recognition.continuous = true;
+                        recognition.maxAlternatives = 1;
+                        recognitionRef.current = recognition;
 
-                    recognition.onstart = () => setIsListening(true);
-                    recognition.onresult = (event: any) => {
-                        lastVoiceTime = Date.now();
-                        let currentFinal = "";
-                        let currentInterim = "";
-                        for (let i = event.resultIndex; i < event.results.length; ++i) {
-                            if (event.results[i].isFinal) {
-                                currentFinal += event.results[i][0].transcript;
-                            } else {
-                                currentInterim += event.results[i][0].transcript;
+                        recognition.onstart = () => setIsListening(true);
+                        recognition.onresult = (event: any) => {
+                            lastVoiceTime = Date.now();
+                            let currentFinal = "";
+                            let currentInterim = "";
+                            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                                const transcriptText = (event.results[i][0]?.transcript || "").trim();
+                                if (!transcriptText) continue;
+                                if (event.results[i].isFinal) {
+                                    currentFinal += ` ${transcriptText}`;
+                                } else {
+                                    currentInterim += ` ${transcriptText}`;
+                                }
                             }
-                        }
-                        
-                        // Use both final and interim for real-time responsiveness
-                        const combined = (capturedTranscript + " " + currentFinal + " " + currentInterim).trim();
-                        setVoiceTranscript(combined);
-                        
-                        // Update our local tracking variable for the loop
-                        latestTranscript = combined;
+                            
+                            // Use both final and interim for real-time responsiveness
+                            const combined = (capturedTranscript + " " + currentFinal + " " + currentInterim).trim();
+                            setVoiceTranscript(combined);
+                            
+                            // Update our local tracking variable for the loop
+                            latestTranscript = combined;
 
-                        // Only "final" committed to the permanent transcript track
-                        if (currentFinal) {
-                            capturedTranscript = (capturedTranscript + " " + currentFinal).trim();
-                        }
-                    };
-                    recognition.start();
-                } catch (e) {
-                    console.warn("Voice recognition failed", e);
-                }
+                            // Only "final" committed to the permanent transcript track
+                            if (currentFinal.trim()) {
+                                capturedTranscript = (capturedTranscript + " " + currentFinal).trim();
+                            }
+                        };
+
+                        recognition.onerror = (event: any) => {
+                            if (!stopFlagRef.current && event?.error !== "aborted") {
+                                setTimeout(() => {
+                                    if (!stopFlagRef.current) startRecognition();
+                                }, 250);
+                            }
+                        };
+
+                        recognition.onend = () => {
+                            if (!stopFlagRef.current) {
+                                setTimeout(() => {
+                                    if (!stopFlagRef.current) startRecognition();
+                                }, 200);
+                            } else {
+                                setIsListening(false);
+                            }
+                        };
+
+                        recognition.start();
+                    } catch (e) {
+                        console.warn("Voice recognition failed", e);
+                    }
+                };
+
+                startRecognition();
             }
 
             let lastAiCheck = 0;
             let isProcessingAi = false;
-            const AI_CHECK_INTERVAL = 8000; // Increased interval for background checks
+            const AI_CHECK_INTERVAL = 4000;
 
             while (!stopFlagRef.current) {
                 if (!videoRef.current) break;
@@ -259,8 +285,10 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                                 const isHighRisk = response.risk_level === "high";
                                 const isGeneral = response.symptomId === "fever" || /general/i.test(response.specialistType || "");
                                 const shouldFinalize = isHighRisk || (isSpecific && confidence >= 0.6) || (pauseDetected && !isGeneral && confidence >= 0.75);
+                                const genericButClear = pauseDetected && confidence >= 0.55 && latestTranscript.length >= 14;
+                                const shouldFinalizeNow = shouldFinalize || genericButClear;
                                 
-                                if (shouldFinalize) {
+                                if (shouldFinalizeNow) {
                                     stopFlagRef.current = true; // Signal the parent loop to stop
                                     setPredictedDoctor(response.predictedDoctorName);
                                     setAiSpecialist(response.specialistType || null);

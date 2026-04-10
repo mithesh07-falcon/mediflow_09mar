@@ -28,6 +28,7 @@ export function AIDoctorRecommender() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const recognitionRef = useRef<any>(null);
   const stopFlagRef = useRef(false);
+  const liveTranscriptRef = useRef("");
   const [detectedSymptoms, setDetectedSymptoms] = useState<string[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
 
@@ -78,38 +79,148 @@ export function AIDoctorRecommender() {
     if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
   };
 
-  const startScanning = async () => {
-    setIsScanning(true);
-    stopFlagRef.current = false;
-    setDetectedSymptoms([]);
-    
-    // Start voice listening in background
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
+  const getSpeechRecognitionCtor = () => {
+    return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  };
+
+  const startVoiceOnlyCapture = () => {
+    const SpeechRecognition = getSpeechRecognitionCtor();
+    if (!SpeechRecognition) {
+      toast({ variant: "destructive", title: "Voice Unsupported", description: "Your browser does not support speech recognition." });
+      return;
+    }
+
+    try {
       const recognition = new SpeechRecognition();
       recognition.lang = getLangCode(userLang);
       recognition.interimResults = true;
       recognition.continuous = true;
+      recognition.maxAlternatives = 1;
       recognitionRef.current = recognition;
+
+      let capturedFinal = "";
+
+      recognition.onstart = () => setIsListening(true);
       recognition.onresult = (event: any) => {
-        let transcript = "";
+        let currentFinal = "";
+        let currentInterim = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) transcript += event.results[i][0].transcript;
+          const text = (event.results[i][0]?.transcript || "").trim();
+          if (!text) continue;
+          if (event.results[i].isFinal) currentFinal += ` ${text}`;
+          else currentInterim += ` ${text}`;
         }
-        if (transcript) setSymptoms(prev => (prev + " " + transcript).trim());
+
+        if (currentFinal.trim()) {
+          capturedFinal = `${capturedFinal} ${currentFinal}`.trim();
+        }
+
+        const combined = `${capturedFinal} ${currentInterim}`.trim();
+        liveTranscriptRef.current = combined;
+        setSymptoms(combined);
       };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
       recognition.start();
-      setIsListening(true);
+    } catch {
+      toast({ variant: "destructive", title: "Mic Error", description: "Unable to start voice capture." });
+      setIsListening(false);
+    }
+  };
+
+  const startScanning = async () => {
+    if (mode === "text") {
+      startVoiceOnlyCapture();
+      return;
+    }
+
+    setIsScanning(true);
+    stopFlagRef.current = false;
+    setDetectedSymptoms([]);
+    liveTranscriptRef.current = symptoms.trim();
+    
+    // Start voice listening in background
+    const SpeechRecognition = getSpeechRecognitionCtor();
+    if (SpeechRecognition) {
+      const startRecognition = () => {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.lang = getLangCode(userLang);
+          recognition.interimResults = true;
+          recognition.continuous = true;
+          recognition.maxAlternatives = 1;
+          recognitionRef.current = recognition;
+
+          let capturedFinal = liveTranscriptRef.current || "";
+
+          recognition.onstart = () => setIsListening(true);
+          recognition.onresult = (event: any) => {
+            let currentFinal = "";
+            let currentInterim = "";
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              const text = (event.results[i][0]?.transcript || "").trim();
+              if (!text) continue;
+              if (event.results[i].isFinal) currentFinal += ` ${text}`;
+              else currentInterim += ` ${text}`;
+            }
+
+            if (currentFinal.trim()) {
+              capturedFinal = `${capturedFinal} ${currentFinal}`.trim();
+            }
+
+            const merged = `${capturedFinal} ${currentInterim}`.trim();
+            liveTranscriptRef.current = merged;
+            setSymptoms(merged);
+          };
+
+          recognition.onerror = (event: any) => {
+            setIsListening(false);
+            if (!stopFlagRef.current && event?.error !== "aborted") {
+              setTimeout(() => {
+                if (!stopFlagRef.current) startRecognition();
+              }, 250);
+            }
+          };
+
+          recognition.onend = () => {
+            setIsListening(false);
+            if (!stopFlagRef.current) {
+              setTimeout(() => {
+                if (!stopFlagRef.current) startRecognition();
+              }, 200);
+            }
+          };
+
+          recognition.start();
+        } catch {
+          setIsListening(false);
+        }
+      };
+
+      startRecognition();
     }
 
     // Capture loop
     let isAnalyzing = false;
+    let stalledAttempts = 0;
     while (!stopFlagRef.current) {
-      if (!videoRef.current) break;
+      if (!videoRef.current) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
       
       // Minimum voice needed to start AI
-      if (symptoms.length < 3) {
-        await new Promise(r => setTimeout(r, 1000));
+      const transcriptForAi = liveTranscriptRef.current.trim();
+      if (transcriptForAi.length < 4) {
+        await new Promise(r => setTimeout(r, 800));
         continue;
       }
 
@@ -135,11 +246,12 @@ export function AIDoctorRecommender() {
             
             const aiRes = await detectBodyPart({
               imageBase64: base64,
-              voiceTranscript: symptoms || "Scanning body part",
+              voiceTranscript: transcriptForAi || "Scanning body part",
               staffList: staffJson
             });
 
             if (aiRes.mismatch) {
+              stalledAttempts += 1;
               toast({ 
                   title: "Matching Error", 
                   description: aiRes.message,
@@ -150,10 +262,21 @@ export function AIDoctorRecommender() {
                   utterance.lang = getLangCode(userLang);
                   window.speechSynthesis.speak(utterance);
               }
-            } else if (aiRes.symptomId && aiRes.symptomId !== "fever" && aiRes.specialistType !== "General Physician" && aiRes.specialistType !== "General") {
+            } else {
+              const confidence = Number.isFinite(aiRes.confidence) ? aiRes.confidence : 0.5;
+              const specialist = (aiRes.specialistType || "").trim();
+              const hasSpecialist = specialist.length > 0;
+              const transcriptIsRich = transcriptForAi.length >= 14;
+              const canFinalize = aiRes.emergency || (hasSpecialist && (confidence >= 0.5 || transcriptIsRich));
+
+              if (!canFinalize) {
+                stalledAttempts += 1;
+              }
+
+              if (canFinalize) {
               setResult({ 
-                  recommendedSpecialist: aiRes.specialistType, 
-                  reason: aiRes.reason,
+                  recommendedSpecialist: specialist || "General Physician", 
+                  reason: aiRes.reason || "Based on your symptoms and scan, consult the recommended specialist.",
                   risk_level: aiRes.risk_level,
                   emergency: aiRes.emergency,
                   detectedSymptoms: aiRes.detectedSymptoms,
@@ -162,18 +285,30 @@ export function AIDoctorRecommender() {
               } as any);
               if (aiRes.detectedSymptoms) setDetectedSymptoms(aiRes.detectedSymptoms);
               
-              toast({ title: "Specialist Found!", description: aiRes.reason });
+              toast({ title: "Specialist Found!", description: aiRes.reason || specialist });
 
               if (window.speechSynthesis) {
                 const msg = userLang === "Hindi" 
-                    ? `विशेषज्ञ मिल गया! हमने ${aiRes.specialistType} का सुझाव दिया है।`
-                    : `Specialist found! We recommend ${aiRes.specialistType}.`;
+                    ? `विशेषज्ञ मिल गया! हमने ${specialist || "जनरल फिजिशियन"} का सुझाव दिया है।`
+                    : `Specialist found! We recommend ${specialist || "General Physician"}.`;
                 const utterance = new SpeechSynthesisUtterance(msg);
                 utterance.lang = getLangCode(userLang);
                 window.speechSynthesis.speak(utterance);
               }
 
               stopScanning();
+              }
+            }
+
+            if (stalledAttempts >= 3 && transcriptForAi.length >= 8 && !stopFlagRef.current) {
+              try {
+                const fallback = await aiDoctorRecommendation({ symptoms: transcriptForAi });
+                setResult(fallback);
+                toast({ title: "Recommendation Ready", description: "Generated from voice symptom summary." });
+                stopScanning();
+              } catch {
+                // Keep scanning if fallback fails
+              }
             }
           }
         } catch (e) {
@@ -185,6 +320,8 @@ export function AIDoctorRecommender() {
 
       await new Promise(r => setTimeout(r, 5000));
     }
+
+    setIsScanning(false);
   };
 
   const handleRecommendation = async () => {
