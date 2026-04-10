@@ -36,6 +36,17 @@ interface Medication {
   scheduledMinute: number;
 }
 
+function safeParseArray<T = any>(key: string): T[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function MedicationSchedulePage() {
   const { toast } = useToast();
   const [meds, setMeds] = useState<Medication[]>([]);
@@ -47,13 +58,18 @@ export default function MedicationSchedulePage() {
 
   const fetchPrescriptions = useCallback(() => {
     const userStr = localStorage.getItem("mediflow_current_user");
-    const user = userStr ? JSON.parse(userStr) : null;
+    let user: any = null;
+    try {
+      user = userStr ? JSON.parse(userStr) : null;
+    } catch {
+      user = null;
+    }
+
     if (user && user.guardianPhone) {
       setGuardianContact(user.guardianPhone);
     }
 
-    const savedFamily = localStorage.getItem("mediflow_family_members");
-    const familyMembers = savedFamily ? JSON.parse(savedFamily) : [];
+    const familyMembers = safeParseArray<any>("mediflow_family_members");
     const currentEmail = user?.email || "default";
     const myMembers = familyMembers.filter((m: any) => m.userId === currentEmail);
     // If no members at all (e.g. legacy or fresh), at least allow their own prescriptions
@@ -61,30 +77,36 @@ export default function MedicationSchedulePage() {
       ? myMembers.map((m: any) => m.name.toLowerCase())
       : [user?.firstName?.toLowerCase()].filter(Boolean);
 
-    const saved = localStorage.getItem("mediflow_prescriptions");
-    if (saved) {
-      const prescriptions = JSON.parse(saved);
-      // STRICT PRIVACY: Only show meds issued to this user or their authorized family members
-      const myPrescriptions = prescriptions.filter((rx: any) =>
-        authorizedNames.includes(rx.patientName?.toLowerCase())
-      );
+    const allPrescriptions = safeParseArray<any>("mediflow_prescriptions");
 
-      setPrescriptions(myPrescriptions);
+    // STRICT PRIVACY: Only show meds issued to this user or their authorized family members
+    const myPrescriptions = allPrescriptions
+      .filter((rx: any) => authorizedNames.includes(String(rx?.patientName || "").toLowerCase()))
+      .map((rx: any, rxIndex: number) => ({
+        ...rx,
+        id: rx?.id ? String(rx.id) : `RX-${rxIndex + 1}`,
+        medications: Array.isArray(rx?.medications) ? rx.medications : [],
+      }));
 
-      const allMeds: Medication[] = myPrescriptions.flatMap((rx: any) =>
-        rx.medications.map((m: any) => ({
-          id: m.id,
-          name: m.name,
-          dose: m.dosage,
-          timeLabel: m.timeLabel,
-          scheduledHour: m.scheduledHour,
-          scheduledMinute: m.scheduledMinute,
-          frequency: m.frequency,
-          taken: JSON.parse(localStorage.getItem(`med_taken_${m.id}`) || "false")
-        }))
-      );
-      setMeds(allMeds);
-    }
+    setPrescriptions(myPrescriptions);
+
+    const allMeds: Medication[] = myPrescriptions.flatMap((rx: any) =>
+      (Array.isArray(rx.medications) ? rx.medications : []).map((m: any, medIndex: number) => {
+        const medId = m?.id ?? `${rx.id}-${medIndex}`;
+        return {
+          id: medId,
+          name: m?.name || "Unnamed Medicine",
+          dose: m?.dosage || m?.dose || "-",
+          timeLabel: m?.timeLabel || "Not set",
+          scheduledHour: Number.isFinite(Number(m?.scheduledHour)) ? Number(m.scheduledHour) : 0,
+          scheduledMinute: Number.isFinite(Number(m?.scheduledMinute)) ? Number(m.scheduledMinute) : 0,
+          frequency: m?.frequency || "As directed",
+          taken: JSON.parse(localStorage.getItem(`med_taken_${medId}`) || "false")
+        };
+      })
+    );
+
+    setMeds(allMeds);
     setLoading(false);
   }, []);
 
@@ -253,10 +275,10 @@ export default function MedicationSchedulePage() {
                             </div>
                             <div>
                               <div className="flex items-center gap-3">
-                                <p className="text-xl font-black text-slate-800">{rx.id}</p>
-                                <Badge className="bg-green-100 text-green-700 font-bold border-none">{rx.date}</Badge>
+                                <p className="text-xl font-black text-slate-800">{rx.id || "RX-UNASSIGNED"}</p>
+                                <Badge className="bg-green-100 text-green-700 font-bold border-none">{rx.date || "No date"}</Badge>
                               </div>
-                              <p className="text-sm font-bold text-muted-foreground uppercase mt-1">Issued by Dr. {rx.doctorName}</p>
+                              <p className="text-sm font-bold text-muted-foreground uppercase mt-1">Issued by Dr. {rx.doctorName || "Unknown"}</p>
                             </div>
                           </div>
                           <ChevronDown className={`h-6 w-6 text-slate-300 transition-transform ${expandedRx === rx.id ? 'rotate-180' : ''}`} />
@@ -278,25 +300,31 @@ export default function MedicationSchedulePage() {
                             <div className="mb-8">
                               <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Clinical Observations</p>
                               <p className="p-4 bg-white rounded-xl border italic text-sm text-slate-600 line-clamp-3 hover:line-clamp-none transition-all cursor-pointer">
-                                "{rx.notes}"
+                                "{rx.notes || "No clinical notes captured."}"
                               </p>
                             </div>
                             <div className="space-y-4">
                               <p className="text-[10px] font-black uppercase text-slate-400">Regimen Details</p>
-                              {rx.medications.map((m: any, idx: number) => (
-                                <div key={idx} className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm">
-                                  <div className="flex items-center gap-4">
-                                    <Pill className="h-5 w-5 text-primary" />
-                                    <div>
-                                      <p className="font-bold">{m.name}</p>
-                                      <p className="text-xs text-muted-foreground uppercase font-black">{m.dosage} • {m.timeLabel}</p>
+                              {Array.isArray(rx.medications) && rx.medications.length > 0 ? (
+                                rx.medications.map((m: any, idx: number) => (
+                                  <div key={m?.id ?? idx} className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm">
+                                    <div className="flex items-center gap-4">
+                                      <Pill className="h-5 w-5 text-primary" />
+                                      <div>
+                                        <p className="font-bold">{m?.name || "Unnamed Medicine"}</p>
+                                        <p className="text-xs text-muted-foreground uppercase font-black">{m?.dosage || m?.dose || "-"} • {m?.timeLabel || "Not set"}</p>
+                                      </div>
                                     </div>
+                                    <Badge className="bg-slate-100 text-slate-600 border-none font-bold uppercase text-[10px] px-3">
+                                      {m?.duration || "As prescribed"}
+                                    </Badge>
                                   </div>
-                                  <Badge className="bg-slate-100 text-slate-600 border-none font-bold uppercase text-[10px] px-3">
-                                    {m.duration}
-                                  </Badge>
+                                ))
+                              ) : (
+                                <div className="p-4 bg-white rounded-xl border text-sm text-muted-foreground">
+                                  No medication items available for this prescription.
                                 </div>
-                              ))}
+                              )}
                             </div>
                           </div>
                         )}

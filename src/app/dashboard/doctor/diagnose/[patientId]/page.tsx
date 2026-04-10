@@ -71,6 +71,17 @@ function loadMedTimeSlots(): MedTimeSlot[] {
    return DEFAULT_MED_TIME_SLOTS;
 }
 
+function safeParseArrayFromStorage<T = any>(key: string): T[] {
+   try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+   } catch {
+      return [];
+   }
+}
+
 export default function DiagnosisPage() {
    const router = useRouter();
    const { patientId } = useParams();
@@ -88,7 +99,7 @@ export default function DiagnosisPage() {
       // Load admin-configured medication time slots
       setMedTimeSlots(loadMedTimeSlots());
 
-      const savedAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
+      const savedAppts = safeParseArrayFromStorage<any>("mediflow_appointments");
       const appointment = savedAppts.find((a: any) => String(a.id) === String(patientId));
       if (appointment) {
          setPatientInfo({
@@ -166,8 +177,30 @@ export default function DiagnosisPage() {
       setLoading(true);
 
       setTimeout(async () => {
-         const savedPrescriptions = JSON.parse(localStorage.getItem("mediflow_prescriptions") || "[]");
-         const doctorUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+         const savedPrescriptions = safeParseArrayFromStorage<any>("mediflow_prescriptions");
+         const doctorUserRaw = localStorage.getItem("mediflow_current_user") || "{}";
+         let doctorUser: any = {};
+         try {
+            doctorUser = JSON.parse(doctorUserRaw);
+         } catch {
+            doctorUser = {};
+         }
+
+         const normalizedMeds = meds
+            .filter((m) => String(m.name || "").trim().length > 0)
+            .map((m, index) => ({
+               id: m.id || `${Date.now()}-${index}`,
+               name: m.name || "Unnamed Medicine",
+               dosage: m.dosage || "-",
+               frequency: m.frequency || "As directed",
+               duration: m.duration || `${m.courseDays || 0} days`,
+               courseDays: Number.isFinite(Number(m.courseDays)) ? Number(m.courseDays) : 0,
+               courseEndDate: m.courseEndDate || format(addDays(new Date(), Number(m.courseDays) || 0), "MMM d, yyyy"),
+               timeLabel: m.timeLabel || "Not set",
+               scheduledHour: Number.isFinite(Number(m.scheduledHour)) ? Number(m.scheduledHour) : 0,
+               scheduledMinute: Number.isFinite(Number(m.scheduledMinute)) ? Number(m.scheduledMinute) : 0,
+               isCustomTime: !!m.isCustomTime,
+            }));
 
          // CONSTRAINT 17 & 18: Prescription with editing window and permanent storage
          const newPrescription = {
@@ -179,11 +212,11 @@ export default function DiagnosisPage() {
             submittedAt: new Date().toISOString(), // CONSTRAINT 17: Track time for 10-min edit window
             isFinalized: false, // Will become true after 10 minutes
             doctorEmail: doctorUser.email,
-            doctorName: doctorUser.firstName,
+            doctorName: doctorUser.firstName || doctorUser.name || "Unknown Doctor",
             doctorSpecialization: doctorUser.specialization || "General",
             notes: diagnosisNote,
             diagnosisDescription: diagnosisNote, // CONSTRAINT 18: Store full description
-            medications: meds,
+            medications: normalizedMeds,
             sentToPharmacy: sendToPharmacy,
             consentCaptured: patientConsent,
             isPermanent: true, // CONSTRAINT 18: Cannot be deleted by normal users
@@ -192,15 +225,15 @@ export default function DiagnosisPage() {
          localStorage.setItem("mediflow_prescriptions", JSON.stringify([newPrescription, ...savedPrescriptions]));
 
          // CONSTRAINT 18: Also store in permanent medical history
-         const medHistory = JSON.parse(localStorage.getItem("mediflow_medical_history") || "[]");
+         const medHistory = safeParseArrayFromStorage<any>("mediflow_medical_history");
          medHistory.push({
             prescriptionId: newPrescription.id,
             patientId,
             patientName: patientInfo?.name,
             diagnosisDescription: diagnosisNote,
-            prescribedMedicines: meds.map(m => ({ name: m.name, dosage: m.dosage, frequency: m.frequency, duration: m.duration })),
+            prescribedMedicines: normalizedMeds.map(m => ({ name: m.name, dosage: m.dosage, frequency: m.frequency, duration: m.duration })),
             dateTime: new Date().toISOString(),
-            doctorName: doctorUser.firstName,
+            doctorName: doctorUser.firstName || doctorUser.name || "Unknown Doctor",
             doctorEmail: doctorUser.email,
             doctorSpecialization: doctorUser.specialization || "General",
             isPermanent: true,
@@ -208,7 +241,7 @@ export default function DiagnosisPage() {
          localStorage.setItem("mediflow_medical_history", JSON.stringify(medHistory));
          
          // ── DATA INTEGRITY: Mark appointment as Completed ──────────────────
-         const savedAppts = JSON.parse(localStorage.getItem("mediflow_appointments") || "[]");
+         const savedAppts = safeParseArrayFromStorage<any>("mediflow_appointments");
          const updatedAppts = savedAppts.map((a: any) =>
             String(a.id) === String(patientId) ? { ...a, status: "Completed", prescriptionId: newPrescription.id } : a
          );

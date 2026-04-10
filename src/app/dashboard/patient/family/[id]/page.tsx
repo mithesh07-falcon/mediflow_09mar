@@ -58,6 +58,17 @@ interface ManualRecord {
   category: string;
 }
 
+function safeParseArrayFromStorage<T = any>(key: string): T[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 const RECORD_CATEGORIES = [
   { value: "lab-report", label: "Lab Report", icon: FlaskConical, color: "text-blue-500 bg-blue-50" },
   { value: "vaccination", label: "Vaccination", icon: Syringe, color: "text-green-500 bg-green-50" },
@@ -96,13 +107,17 @@ export default function FamilyMemberProfilePage({
     const activeUserStr = localStorage.getItem("mediflow_current_user");
     let currentEmail = "default";
     if (activeUserStr) {
-      const user = JSON.parse(activeUserStr);
+      let user: any = {};
+      try {
+        user = JSON.parse(activeUserStr);
+      } catch {
+        user = {};
+      }
       currentEmail = user.email || "default";
     }
 
-    const saved = localStorage.getItem("mediflow_family_members");
-    if (saved) {
-      const parsedMembers = JSON.parse(saved);
+    const parsedMembers = safeParseArrayFromStorage<any>("mediflow_family_members");
+    if (parsedMembers.length > 0) {
       // Ensure the member belongs to the logged-in user securely
       const found = parsedMembers.find((m: any) => m.id === id && m.userId === currentEmail);
       if (found) {
@@ -115,23 +130,14 @@ export default function FamilyMemberProfilePage({
     }
 
     // 2. Get Manual Records
-    const savedManual = localStorage.getItem(
-      `mediflow_health_records_${id}`
-    );
-    if (savedManual) {
-      setManualRecords(JSON.parse(savedManual));
-    }
+    setManualRecords(safeParseArrayFromStorage<ManualRecord>(`mediflow_health_records_${id}`));
   }, [id, router]);
 
   // Filter appointments based on the loaded member name
   useEffect(() => {
     if (!member) return;
-    const allAppts = JSON.parse(
-      localStorage.getItem("mediflow_appointments") || "[]"
-    );
-    const allPrescriptions = JSON.parse(
-      localStorage.getItem("mediflow_prescriptions") || "[]"
-    );
+    const allAppts = safeParseArrayFromStorage<any>("mediflow_appointments");
+    const allPrescriptions = safeParseArrayFromStorage<any>("mediflow_prescriptions");
 
     // Filter all appointments matching the patient's name (both completed and confirmed)
     const memberAppts = allAppts
@@ -580,6 +586,9 @@ export default function FamilyMemberProfilePage({
                 if (item.source === "auto") {
                   // Clinical / Appointment Record
                   const isExpanded = expandedAppt === (item.id?.toString() || "");
+                  const prescribedMeds = Array.isArray(item.prescriptionData?.medications)
+                    ? item.prescriptionData.medications
+                    : [];
                   return (
                     <Card
                       key={`auto-${item.id}`}
@@ -653,23 +662,21 @@ export default function FamilyMemberProfilePage({
                                       Doctor&apos;s Diagnosis
                                     </p>
                                     <p className="font-bold text-slate-800 text-lg">
-                                      {item.prescriptionData.notes}
+                                      {item.prescriptionData.notes || "No diagnostic notes captured."}
                                     </p>
                                   </div>
 
                                   {/* Medications */}
-                                  {item.prescriptionData.medications &&
-                                    item.prescriptionData.medications.length >
-                                      0 && (
+                                  {prescribedMeds.length > 0 && (
                                       <div>
                                         <p className="text-xs font-bold uppercase text-slate-400 mb-3">
                                           Prescribed Medications
                                         </p>
                                         <div className="grid gap-2">
-                                          {item.prescriptionData.medications.map(
+                                          {prescribedMeds.map(
                                             (med: any) => (
                                               <div
-                                                key={med.id}
+                                                key={med.id || `${item.id}-${med.name || "med"}`}
                                                 className="bg-white border rounded-xl p-4 flex justify-between items-center shadow-sm"
                                               >
                                                 <div className="flex items-center gap-3">
@@ -678,19 +685,19 @@ export default function FamilyMemberProfilePage({
                                                   </div>
                                                   <div>
                                                     <p className="font-bold">
-                                                      {med.name}{" "}
+                                                      {med.name || "Unnamed Medicine"}{" "}
                                                       <span className="text-muted-foreground font-normal">
-                                                        ({med.dosage})
+                                                        ({med.dosage || med.dose || "-"})
                                                       </span>
                                                     </p>
                                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                                      {med.frequency} •{" "}
-                                                      {med.duration}
+                                                      {med.frequency || "As directed"} •{" "}
+                                                      {med.duration || "As prescribed"}
                                                     </p>
                                                   </div>
                                                 </div>
                                                 <span className="bg-orange-100 text-orange-600 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">
-                                                  {med.timeLabel}
+                                                  {med.timeLabel || "Not set"}
                                                 </span>
                                               </div>
                                             )
