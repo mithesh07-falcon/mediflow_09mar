@@ -72,6 +72,7 @@ export function SidebarNav({ role }: { role: "patient" | "doctor" | "pharmacist"
     { label: "Book Appointment", href: "/dashboard/patient/appointments", icon: Calendar },
     { label: "My Schedule", href: "/dashboard/patient/my-schedule", icon: ClipboardList },
     { label: "Medication", href: "/dashboard/patient/meds", icon: Pill },
+    { label: "Medication Report", href: "/dashboard/patient/medication-report", icon: FileText },
     { label: "Medical Certificates", href: "/dashboard/patient/certificates", icon: FileText },
     { label: "Family Wallet", href: "/dashboard/patient/wallet", icon: Wallet },
     { label: "Billing", href: "/dashboard/patient/billing", icon: CreditCard },
@@ -87,6 +88,7 @@ export function SidebarNav({ role }: { role: "patient" | "doctor" | "pharmacist"
     { label: "Overview", href: "/dashboard/doctor", icon: Home },
     { label: "Patient List", href: "/dashboard/doctor/patients", icon: Users },
     { label: "My Schedule", href: "/dashboard/doctor/schedule", icon: Calendar },
+    { label: "Medication Report", href: "/dashboard/doctor/medication-report", icon: FileText },
     { label: "Medical Certificates", href: "/dashboard/doctor/certificates", icon: FileText },
     { label: "Compliance Monitor", href: "/dashboard/doctor/compliance", icon: Activity },
   ];
