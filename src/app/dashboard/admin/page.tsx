@@ -61,8 +61,6 @@ const PREDEFINED_DOCTOR_SPECIALIZATIONS = [
   "Endocrinology",
 ];
 
-const CUSTOM_SPECIALIZATION_OPTION = "__custom__";
-
 export default function FormalAdminDashboard() {
   const { toast } = useToast();
   // CONSTRAINT 10: Only admins can access this portal
@@ -84,6 +82,7 @@ export default function FormalAdminDashboard() {
   const [generatedCreds, setGeneratedCreds] = useState<any>(null);
   const [selectedSpecializationOption, setSelectedSpecializationOption] = useState("");
   const [customSpecialization, setCustomSpecialization] = useState("");
+  const [useCustomSpecialization, setUseCustomSpecialization] = useState(false);
 
   // Complaints State
   const [complaints, setComplaints] = useState<any[]>([]);
@@ -261,7 +260,7 @@ export default function FormalAdminDashboard() {
 
   const handleOnboardStaff = async () => {
     const cleanPhone = newStaff.phone.replace(/\s/g, '');
-    const resolvedDoctorSpecialization = selectedSpecializationOption === CUSTOM_SPECIALIZATION_OPTION
+    const resolvedDoctorSpecialization = useCustomSpecialization
       ? customSpecialization.trim()
       : selectedSpecializationOption.trim();
 
@@ -341,6 +340,7 @@ export default function FormalAdminDashboard() {
         setNewStaff({ name: "", email: "", password: "", role: "doctor", specialization: "", license: "", phone: "+91 " });
         setSelectedSpecializationOption("");
         setCustomSpecialization("");
+        setUseCustomSpecialization(false);
         fetchData();
         toast({ title: "Success", description: `Credential generated and securely hashed in registry.` });
       } else {
@@ -642,10 +642,9 @@ export default function FormalAdminDashboard() {
                         value={newStaff.role}
                         onValueChange={v => {
                           setNewStaff({ ...newStaff, role: v, specialization: v === "doctor" ? newStaff.specialization : "" });
-                          if (v !== "doctor") {
-                            setSelectedSpecializationOption("");
-                            setCustomSpecialization("");
-                          }
+                          setSelectedSpecializationOption("");
+                          setCustomSpecialization("");
+                          setUseCustomSpecialization(false);
                         }}
                       >
                         <SelectTrigger className="h-14 rounded-2xl border-2 font-bold"><SelectValue /></SelectTrigger>
@@ -685,10 +684,10 @@ export default function FormalAdminDashboard() {
                         value={selectedSpecializationOption}
                         onValueChange={(value) => {
                           setSelectedSpecializationOption(value);
-                          if (value !== CUSTOM_SPECIALIZATION_OPTION) {
-                            setCustomSpecialization("");
-                          }
+                          setUseCustomSpecialization(false);
+                          setCustomSpecialization("");
                         }}
+                        disabled={useCustomSpecialization}
                       >
                         <SelectTrigger className="h-14 rounded-2xl border-2 font-bold">
                           <SelectValue placeholder="Select a specialization" />
@@ -699,11 +698,27 @@ export default function FormalAdminDashboard() {
                               {specialization}
                             </SelectItem>
                           ))}
-                          <SelectItem value={CUSTOM_SPECIALIZATION_OPTION}>Custom (Type New)</SelectItem>
                         </SelectContent>
                       </Select>
 
-                      {selectedSpecializationOption === CUSTOM_SPECIALIZATION_OPTION && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-9 px-1 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-transparent hover:underline w-fit"
+                        onClick={() => {
+                          const next = !useCustomSpecialization;
+                          setUseCustomSpecialization(next);
+                          if (next) {
+                            setSelectedSpecializationOption("");
+                          } else {
+                            setCustomSpecialization("");
+                          }
+                        }}
+                      >
+                        {useCustomSpecialization ? "Use Predefined List" : "Can\u2019t Find It? Add Custom"}
+                      </Button>
+
+                      {useCustomSpecialization && (
                         <Input
                           value={customSpecialization}
                           onChange={e => setCustomSpecialization(e.target.value)}
@@ -737,7 +752,7 @@ export default function FormalAdminDashboard() {
                       !/[A-Z]/.test(newStaff.password) ||
                       !/[a-z]/.test(newStaff.password) ||
                       (newStaff.role === "doctor" && !(
-                        selectedSpecializationOption === CUSTOM_SPECIALIZATION_OPTION
+                        useCustomSpecialization
                           ? customSpecialization.trim()
                           : selectedSpecializationOption.trim()
                       ))
