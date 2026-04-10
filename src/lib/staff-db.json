@@ -249,5 +249,33 @@
     "isVerified": true,
     "isAuthorized": true,
     "pharmacyId": "PH-GLOBAL-NEW"
+  },
+  {
+    "id": 1775837351436,
+    "name": "DR.Mithesh",
+    "email": "mithesh0099@mediflow.com",
+    "phone": "+918520123355",
+    "passwordHash": "[SECURE_HASH]_bWl0aGVzaEAxMTIyUQ==",
+    "passwordPlain": "mithesh@1122Q",
+    "role": "doctor",
+    "specialization": "Dentistry",
+    "license": null,
+    "isVerified": true,
+    "isAuthorized": true,
+    "pharmacyId": null
+  },
+  {
+    "id": 1775837882431,
+    "name": "Dr.Vijay",
+    "email": "vijay1122@mediflow.com",
+    "phone": "+917410326589",
+    "passwordHash": "[SECURE_HASH]_dmlqYXlAMTEyMlE=",
+    "passwordPlain": "vijay@1122Q",
+    "role": "doctor",
+    "specialization": "Pediatrics",
+    "license": null,
+    "isVerified": true,
+    "isAuthorized": true,
+    "pharmacyId": null
   }
 ]

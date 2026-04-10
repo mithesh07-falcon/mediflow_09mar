@@ -6,6 +6,7 @@ import { Mic, Loader2, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { loadAccessibilitySettings } from "@/lib/elderly-portal";
 
 type VoiceIntent = "home" | "doctor" | "medicines" | "help";
 
@@ -209,7 +210,7 @@ export function ElderlyVoiceAssistant() {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = langConfig.code;
-        utterance.rate = 0.9;
+        utterance.rate = loadAccessibilitySettings().voiceRate || 0.9;
         utterance.onstart = () => setIsSpeaking(true);
         utterance.onend = () => setIsSpeaking(false);
         window.speechSynthesis.speak(utterance);

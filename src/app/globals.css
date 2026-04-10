@@ -74,4 +74,22 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-headline tracking-tight;
   }
+
+  .elderly-high-contrast {
+    filter: contrast(1.2) saturate(0.9);
+  }
+
+  .elderly-high-contrast body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .elderly-reduce-motion *,
+  .elderly-reduce-motion *::before,
+  .elderly-reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

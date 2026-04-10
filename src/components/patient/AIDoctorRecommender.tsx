@@ -9,6 +9,7 @@ import { aiDoctorRecommendation, type AIDoctorRecommendationOutput } from "@/ai/
 import { detectBodyPart } from "@/ai/flows/ai-body-part-detection";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { captureVideoFrameForServerAction } from "@/lib/image-payload";
 import { cn } from "@/lib/utils";
 
 export function AIDoctorRecommender() {
@@ -120,13 +121,16 @@ export function AIDoctorRecommender() {
       isAnalyzing = true;
       (async () => {
         try {
-          const canvas = document.createElement("canvas");
-          canvas.width = videoRef.current?.videoWidth || 640;
-          canvas.height = videoRef.current?.videoHeight || 480;
-          const ctx = canvas.getContext("2d");
-          if (ctx && videoRef.current) {
-            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-            const base64 = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
+          if (videoRef.current) {
+            const base64 = captureVideoFrameForServerAction(videoRef.current, {
+              maxDimension: 640,
+              maxBase64Chars: 850_000,
+              quality: 0.45,
+              minQuality: 0.25,
+            });
+            if (!base64) {
+              throw new Error("Frame capture failed");
+            }
             const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
             
             const aiRes = await detectBodyPart({

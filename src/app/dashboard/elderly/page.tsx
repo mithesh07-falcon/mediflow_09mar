@@ -20,7 +20,12 @@ import {
   Languages,
   Calendar,
   Clock,
-  QrCode
+  QrCode,
+  Settings2,
+  Siren,
+  ReceiptText,
+  WifiOff,
+  CircleHelp
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -28,6 +33,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ElderlyVoiceAssistant } from "@/components/elderly/ElderlyVoiceAssistant";
 import { Stethoscope } from "lucide-react";
 import { detectPill } from "@/ai/flows/ai-pill-scanner";
+import { captureVideoFrameForServerAction } from "@/lib/image-payload";
+import {
+  appendGuardianNotification,
+  applyAccessibilitySettings,
+  getDefaultEmergencyContactFromUser,
+  loadAccessibilitySettings,
+  loadEmergencyContacts,
+  saveEmergencyContacts,
+} from "@/lib/elderly-portal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -244,6 +258,7 @@ export default function ElderlyDashboard() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [pillFound, setPillFound] = useState<any>(null);
   const [walletBalance, setWalletBalance] = useState(5000);
+  const [isOffline, setIsOffline] = useState(false);
 
   // Feature 1: Fix hardcoded "Ravi" fallback
   const [user, setUser] = useState<any>({
@@ -261,11 +276,14 @@ export default function ElderlyDashboard() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = t.langCode; // Feature 2: Speak in regional language
-    utterance.rate = 0.9;
+    utterance.rate = loadAccessibilitySettings().voiceRate || 0.9;
     window.speechSynthesis.speak(utterance);
   }, [t.langCode]);
 
   useEffect(() => {
+    const settings = loadAccessibilitySettings();
+    applyAccessibilitySettings(settings);
+
     const savedUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
     if (!savedUser.isElderly) {
       router.push("/dashboard/patient");
@@ -281,6 +299,14 @@ export default function ElderlyDashboard() {
         guardianPhone: savedUser.guardianPhone || "",
         language: savedUser.language || "English"
       });
+
+      const existingContacts = loadEmergencyContacts();
+      if (existingContacts.length === 0) {
+        const defaults = getDefaultEmergencyContactFromUser(savedUser);
+        if (defaults.length > 0) {
+          saveEmergencyContacts(defaults);
+        }
+      }
     }
 
     // Sync wallet balance
@@ -299,6 +325,20 @@ export default function ElderlyDashboard() {
     };
     runSync();
   }, [router]);
+
+  useEffect(() => {
+    setIsOffline(!navigator.onLine);
+    const onOnline = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
 
 
@@ -336,14 +376,13 @@ export default function ElderlyDashboard() {
     try {
       if (!videoRef.current) throw new Error("Camera not initialized");
 
-      const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth || 640;
-      canvas.height = videoRef.current.videoHeight || 480;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context failed");
-
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
+      const base64Image = captureVideoFrameForServerAction(videoRef.current, {
+        maxDimension: 640,
+        maxBase64Chars: 850_000,
+        quality: 0.55,
+        minQuality: 0.25,
+      });
+      if (!base64Image) throw new Error("Image encoding failed");
 
       // Grab their specific prescriptions to check against
       const allPrescriptions = JSON.parse(localStorage.getItem("mediflow_prescriptions") || "[]");
@@ -393,10 +432,34 @@ export default function ElderlyDashboard() {
   };
 
   const triggerSOS = () => {
+    const contacts = loadEmergencyContacts().sort((a, b) => a.priority - b.priority);
+    const primaryContact = contacts[0] || {
+      name: user.guardianName || "Guardian",
+      phone: user.guardianPhone || "N/A",
+      relation: user.guardianRelationship || "Guardian",
+      priority: 1,
+      id: "fallback",
+    };
+
+    appendGuardianNotification({
+      type: "sos",
+      message: `SOS triggered by ${user.name}. Contact ${primaryContact.name} at ${primaryContact.phone}.`,
+    });
+
+    localStorage.setItem(
+      "mediflow_last_sos_event",
+      JSON.stringify({
+        by: user.name,
+        contactName: primaryContact.name,
+        contactPhone: primaryContact.phone,
+        createdAt: new Date().toISOString(),
+      })
+    );
+
     toast({
       variant: "destructive",
       title: "SOS TRIGGERED",
-      description: `Connecting to ${user.guardianName} (SOS Emergency Contact) at ${user.guardianPhone}...`,
+      description: `Connecting to ${primaryContact.name} (${primaryContact.relation}) at ${primaryContact.phone}...`,
     });
     speak(t.emergencyAlert);
   };
@@ -415,6 +478,13 @@ export default function ElderlyDashboard() {
 
   return (
     <div className="min-h-screen bg-white text-black font-sans pb-32 flex flex-col p-6 space-y-12 touch-manipulation">
+      {isOffline && (
+        <div className="rounded-[2rem] border-[8px] border-black bg-yellow-200 p-6 flex items-center gap-4 shadow-xl">
+          <WifiOff className="h-10 w-10" />
+          <p className="text-2xl font-black uppercase">Offline mode active. Using saved data from this device.</p>
+        </div>
+      )}
+
       {/* Accessibility Header */}
       <header className="flex justify-between items-center border-b-[15px] border-black pb-10">
         <div>
@@ -466,11 +536,32 @@ export default function ElderlyDashboard() {
             </div>
           </div>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         <Button
-          className="h-56 w-56 sm:h-auto sm:aspect-square text-6xl font-black bg-black text-white rounded-[5rem] border-[15px] border-black shadow-2xl hover:bg-zinc-800 transition-all active:scale-90 flex items-center justify-center"
-          onClick={handleRefill}
+          className="h-28 text-3xl font-black bg-white text-black border-8 border-black rounded-[2rem] flex items-center gap-4"
+          onClick={() => router.push('/dashboard/elderly/accessibility')}
         >
-          <Pill className="h-24 w-24" strokeWidth={3} />
+          <Settings2 className="h-10 w-10" /> ACCESSIBILITY
+        </Button>
+        <Button
+          className="h-28 text-3xl font-black bg-white text-black border-8 border-black rounded-[2rem] flex items-center gap-4"
+          onClick={() => router.push('/dashboard/elderly/emergency-contacts')}
+        >
+          <Siren className="h-10 w-10" /> CONTACTS
+        </Button>
+        <Button
+          className="h-28 text-3xl font-black bg-white text-black border-8 border-black rounded-[2rem] flex items-center gap-4"
+          onClick={() => router.push('/dashboard/elderly/payments')}
+        >
+          <ReceiptText className="h-10 w-10" /> RECEIPTS
+        </Button>
+        <Button
+          className="h-28 text-3xl font-black bg-white text-black border-8 border-black rounded-[2rem] flex items-center gap-4"
+          onClick={() => router.push('/dashboard/elderly/help')}
+        >
+          <CircleHelp className="h-10 w-10" /> TUTORIAL
         </Button>
       </div>
 
@@ -584,8 +675,8 @@ export default function ElderlyDashboard() {
         <span className="text-3xl font-black uppercase opacity-20">{t.watching}</span>
       </footer>
 
-      {/* Functional Voice Assistant */}
       <ElderlyVoiceAssistant />
+
     </div>
   );
 }

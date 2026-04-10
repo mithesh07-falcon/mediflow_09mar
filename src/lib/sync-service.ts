@@ -175,7 +175,12 @@ export const GlobalSync = {
         try {
             const rx = localStorage.getItem("mediflow_prescriptions") || "[]";
             const history = localStorage.getItem("mediflow_medical_history") || "[]";
-            const data = JSON.stringify({ rx: JSON.parse(rx), history: JSON.parse(history) });
+            const certificates = localStorage.getItem("mediflow_medical_certificates") || "[]";
+            const data = JSON.stringify({
+                rx: JSON.parse(rx),
+                history: JSON.parse(history),
+                certificates: JSON.parse(certificates),
+            });
             
             await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/api/edit/2n4iwexu")}`, {
                 method: "POST",
@@ -212,6 +217,16 @@ export const GlobalSync = {
                         if (!mergedHist.find(lh => String(lh.dateTime) === String(ch.dateTime) && lh.prescriptionId === ch.prescriptionId)) mergedHist.push(ch);
                     });
                     localStorage.setItem("mediflow_medical_history", JSON.stringify(mergedHist));
+
+                    // Sync medical certificates
+                    const localCertificates = JSON.parse(localStorage.getItem("mediflow_medical_certificates") || "[]");
+                    const mergedCertificates = [...localCertificates];
+                    (cloudJSON.certificates || []).forEach((cc: any) => {
+                        if (!mergedCertificates.find((lc) => String(lc.id) === String(cc.id))) {
+                            mergedCertificates.push(cc);
+                        }
+                    });
+                    localStorage.setItem("mediflow_medical_certificates", JSON.stringify(mergedCertificates));
                 }
             }
         } catch (e) {

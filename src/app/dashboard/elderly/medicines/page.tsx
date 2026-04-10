@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Clock, CheckCircle2, Pill } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { appendGuardianNotification, loadAccessibilitySettings } from "@/lib/elderly-portal";
 
 interface Medication {
   id: string;
@@ -17,6 +18,28 @@ interface Medication {
   photoUrl: string;
   timeLabel: string;
   takenToday: boolean;
+  lastReminderDate?: string;
+  lastGuardianAlertDate?: string;
+  lastTakenAt?: string;
+}
+
+const MEDS_RESET_KEY = "mediflow_elderly_meds_last_reset";
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function timeToMinutes(label: string): number {
+  const normalized = label.trim().toUpperCase();
+  const [timePart, meridian] = normalized.split(" ");
+  const [rawHour, rawMinute] = timePart.split(":").map((v) => Number(v));
+  let hour = Number.isFinite(rawHour) ? rawHour : 0;
+  const minute = Number.isFinite(rawMinute) ? rawMinute : 0;
+
+  if (meridian === "PM" && hour < 12) hour += 12;
+  if (meridian === "AM" && hour === 12) hour = 0;
+
+  return hour * 60 + minute;
 }
 
 export default function ElderlyMedicinesPage() {
@@ -32,6 +55,9 @@ export default function ElderlyMedicinesPage() {
     }
 
     const savedMeds = JSON.parse(localStorage.getItem("mediflow_elderly_meds") || "[]");
+    const today = todayKey();
+    const lastReset = localStorage.getItem(MEDS_RESET_KEY);
+
     if (savedMeds.length === 0) {
       const initialMeds: Medication[] = [
         {
@@ -43,7 +69,9 @@ export default function ElderlyMedicinesPage() {
           totalCount: 30,
           photoUrl: "https://picsum.photos/seed/pills1/400/300",
           timeLabel: "08:00 AM",
-          takenToday: false
+          takenToday: false,
+          lastReminderDate: "",
+          lastGuardianAlertDate: ""
         },
         {
           id: "2",
@@ -54,7 +82,9 @@ export default function ElderlyMedicinesPage() {
           totalCount: 15,
           photoUrl: "https://picsum.photos/seed/pills2/400/300",
           timeLabel: "01:00 PM",
-          takenToday: false
+          takenToday: false,
+          lastReminderDate: "",
+          lastGuardianAlertDate: ""
         },
         {
           id: "3",
@@ -65,15 +95,106 @@ export default function ElderlyMedicinesPage() {
           totalCount: 60,
           photoUrl: "https://picsum.photos/seed/pills3/400/300",
           timeLabel: "08:00 PM",
-          takenToday: false
+          takenToday: false,
+          lastReminderDate: "",
+          lastGuardianAlertDate: ""
         }
       ];
       setMeds(initialMeds);
       localStorage.setItem("mediflow_elderly_meds", JSON.stringify(initialMeds));
+      localStorage.setItem(MEDS_RESET_KEY, today);
     } else {
-      setMeds(savedMeds);
+      const normalized = (savedMeds as Medication[]).map((med) => ({
+        ...med,
+        lastReminderDate: med.lastReminderDate || "",
+        lastGuardianAlertDate: med.lastGuardianAlertDate || "",
+      }));
+
+      const resetForNewDay = lastReset !== today;
+      const finalMeds = resetForNewDay
+        ? normalized.map((med) => ({
+            ...med,
+            takenToday: false,
+            lastReminderDate: "",
+            lastGuardianAlertDate: "",
+          }))
+        : normalized;
+
+      setMeds(finalMeds);
+      localStorage.setItem("mediflow_elderly_meds", JSON.stringify(finalMeds));
+      localStorage.setItem(MEDS_RESET_KEY, today);
     }
   }, [router]);
+
+  useEffect(() => {
+    if (meds.length === 0) return;
+
+    const interval = window.setInterval(() => {
+      const today = todayKey();
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const settings = loadAccessibilitySettings();
+      let didUpdate = false;
+
+      const next = meds.map((med) => {
+        if (med.takenToday) return med;
+
+        const dueMinutes = currentMinutes - timeToMinutes(med.timeLabel);
+        if (dueMinutes < 0 || dueMinutes > 240) {
+          return med;
+        }
+
+        let updated = { ...med };
+
+        if (med.lastReminderDate !== today) {
+          didUpdate = true;
+          updated.lastReminderDate = today;
+
+          toast({
+            title: "Medicine Reminder",
+            description: `Please take ${med.name}. It is scheduled for ${med.timeLabel}.`,
+          });
+
+          if (window.speechSynthesis) {
+            const message = new SpeechSynthesisUtterance(`Reminder. Please take ${med.name}.`);
+            message.rate = settings.voiceRate || 1;
+            window.speechSynthesis.speak(message);
+          }
+        }
+
+        if (dueMinutes >= 30 && med.lastGuardianAlertDate !== today) {
+          didUpdate = true;
+          updated.lastGuardianAlertDate = today;
+
+          const alertMessage = `${med.name} was not marked as taken 30 minutes after ${med.timeLabel}.`;
+          appendGuardianNotification({
+            type: "missed_medicine",
+            message: alertMessage,
+          });
+
+          localStorage.setItem(
+            "mediflow_guardian_medication_alert",
+            JSON.stringify({
+              patient: "Senior User",
+              medId: med.id,
+              medName: med.name,
+              timestamp: new Date().toISOString(),
+              status: "missed",
+            })
+          );
+        }
+
+        return updated;
+      });
+
+      if (didUpdate) {
+        setMeds(next);
+        localStorage.setItem("mediflow_elderly_meds", JSON.stringify(next));
+      }
+    }, 60_000);
+
+    return () => window.clearInterval(interval);
+  }, [meds, toast]);
 
   const toggleMed = (id: string) => {
     const updated = meds.map(m => {
@@ -93,7 +214,8 @@ export default function ElderlyMedicinesPage() {
         return {
           ...m,
           takenToday: true,
-          takenCount: Math.min(newCount, m.totalCount)
+          takenCount: Math.min(newCount, m.totalCount),
+          lastTakenAt: new Date().toISOString()
         };
       }
       return m;

@@ -19,7 +19,8 @@ import {
     User,
     Utensils,
     Wallet,
-    PlusCircle
+    PlusCircle,
+    BellRing
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -47,6 +48,7 @@ export default function GuardianDashboard() {
     ]);
 
     const [walletBalance, setWalletBalance] = useState(5000);
+    const [notifications, setNotifications] = useState<any[]>([]);
 
     useEffect(() => {
         const currentUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
@@ -67,6 +69,9 @@ export default function GuardianDashboard() {
 
         const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
         if (savedBalance) setWalletBalance(parseInt(savedBalance));
+
+        const savedNotifications = JSON.parse(localStorage.getItem("mediflow_guardian_notifications") || "[]");
+        setNotifications(savedNotifications);
     }, []);
 
     return (
@@ -239,6 +244,27 @@ export default function GuardianDashboard() {
                               </CardContent>
                          </Card>
                         )}
+
+                        <Card className="rounded-[2.5rem] border-none shadow-xl bg-white">
+                            <CardHeader className="border-b">
+                                <CardTitle className="text-sm uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                                    <BellRing className="h-4 w-4" /> Guardian Alerts
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6 space-y-3">
+                                {notifications.length === 0 ? (
+                                    <p className="text-sm text-slate-500">No active alerts right now.</p>
+                                ) : (
+                                    notifications.slice(0, 4).map((item) => (
+                                        <div key={item.id} className="p-3 rounded-xl border bg-slate-50">
+                                            <p className="text-xs font-black uppercase">{String(item.type || "alert").replaceAll("_", " ")}</p>
+                                            <p className="text-sm text-slate-600 mt-1">{item.message}</p>
+                                            <p className="text-[10px] text-slate-400 mt-1">{new Date(item.createdAt).toLocaleString()}</p>
+                                        </div>
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
 
                         <Card className="rounded-[2.5rem] border-none shadow-xl bg-white">
                             <CardHeader className="border-b">

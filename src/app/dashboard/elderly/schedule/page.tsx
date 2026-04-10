@@ -106,6 +106,20 @@ export default function ElderSchedulePage() {
     return Stethoscope;
   };
 
+  const joinVideoConsultation = (appointment: Appointment) => {
+    const room = `mediflow-${appointment.id}`;
+    window.open(`https://meet.jit.si/${room}`, "_blank", "noopener,noreferrer");
+    toast({
+      title: "Video call opened",
+      description: `Joining consultation room for ${appointment.doctor}.`,
+    });
+  };
+
+  const openNearbyLocation = (appointment: Appointment) => {
+    const query = encodeURIComponent(`${appointment.specialist} clinic near me`);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-black p-8 pb-32 space-y-16">
       <header className="flex items-center justify-between">
@@ -157,10 +171,17 @@ export default function ElderSchedulePage() {
                                 </div>
                                 
                                 <div className="flex gap-6">
-                                    <Button className="flex-1 h-32 text-5xl font-black bg-green-600 hover:bg-green-700 text-white border-[10px] border-green-950 rounded-[2.5rem] shadow-[0_15px_0px_0px_rgba(5,46,22,1)] active:translate-y-2 active:shadow-none transition-all flex items-center gap-6">
+                                    <Button
+                                      className="flex-1 h-32 text-5xl font-black bg-green-600 hover:bg-green-700 text-white border-[10px] border-green-950 rounded-[2.5rem] shadow-[0_15px_0px_0px_rgba(5,46,22,1)] active:translate-y-2 active:shadow-none transition-all flex items-center gap-6"
+                                      onClick={() => joinVideoConsultation(appt)}
+                                    >
                                         <Video className="h-14 w-14" /> JOIN CALL
                                     </Button>
-                                    <Button variant="outline" className="flex-1 h-32 text-5xl font-black border-[10px] border-black rounded-[2.5rem] shadow-[0_15px_0px_0px_rgba(0,0,0,1)] active:translate-y-2 active:shadow-none transition-all flex items-center gap-6">
+                                    <Button
+                                      variant="outline"
+                                      className="flex-1 h-32 text-5xl font-black border-[10px] border-black rounded-[2.5rem] shadow-[0_15px_0px_0px_rgba(0,0,0,1)] active:translate-y-2 active:shadow-none transition-all flex items-center gap-6"
+                                      onClick={() => openNearbyLocation(appt)}
+                                    >
                                         <MapPin className="h-14 w-14" /> GO THERE
                                     </Button>
                                 </div>

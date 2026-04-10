@@ -19,6 +19,7 @@ import {
   XCircle,
   RotateCcw,
   UserX,
+  FileText,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -340,6 +341,9 @@ export default function DoctorDashboard() {
             )}
             <Button variant="outline" className="rounded-xl" onClick={() => router.push("/dashboard/doctor/schedule")}>
               <Calendar className="h-4 w-4 mr-2" /> My Schedule
+            </Button>
+            <Button variant="outline" className="rounded-xl" onClick={() => router.push("/dashboard/doctor/certificates")}>
+              <FileText className="h-4 w-4 mr-2" /> Certificates
             </Button>
             <Badge className="bg-green-100 text-green-700 p-2 font-bold uppercase tracking-widest text-[10px]">
               Session Active

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Heart, Bone, Eye, Thermometer, Smile, Sunrise, Sun, Moon, ArrowLeft, CheckCircle2, Camera, Loader2, Hand, Ear, Activity, Brain, Sparkles, Mic, Square } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { captureVideoFrameForServerAction, normalizeImageDataUrlForServerAction } from "@/lib/image-payload";
 import { detectBodyPart } from "@/ai/flows/ai-body-part-detection";
 
 // Symptom to Specialist mapping
@@ -219,14 +220,15 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
                     // Run AI in a wrapper to avoid blocking the main loop
                     (async () => {
                         try {
-                            const canvas = document.createElement("canvas");
-                            canvas.width = videoRef.current!.videoWidth || 640;
-                            canvas.height = videoRef.current!.videoHeight || 480;
-                            const ctx = canvas.getContext("2d");
-                            if (!ctx) { isProcessingAi = false; return; }
-                            
-                            ctx.drawImage(videoRef.current!, 0, 0, canvas.width, canvas.height);
-                            const base64Image = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
+                            if (!videoRef.current) { isProcessingAi = false; return; }
+
+                            const base64Image = captureVideoFrameForServerAction(videoRef.current, {
+                                maxDimension: 640,
+                                maxBase64Chars: 850_000,
+                                quality: 0.45,
+                                minQuality: 0.25,
+                            });
+                            if (!base64Image) { isProcessingAi = false; return; }
                             const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
                             
                             console.log(`[Scan:AI] Analyzing transcript length: ${latestTranscript.length}. Pause detected: ${pauseDetected}`);
@@ -333,7 +335,15 @@ export function ElderAppointmentSelector({ onSearchDoctors, isLoading = false }:
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const base64Image = (e.target?.result as string).split(",")[1];
+                const dataUrl = e.target?.result as string;
+                if (!dataUrl) throw new Error("Unable to read uploaded image");
+
+                const base64Image = await normalizeImageDataUrlForServerAction(dataUrl, {
+                    maxDimension: 640,
+                    maxBase64Chars: 850_000,
+                    quality: 0.55,
+                    minQuality: 0.25,
+                });
                 const staffJson = JSON.stringify(staff.map(s => ({ name: s.name, spec: s.specialization })));
                 const response = await detectBodyPart({
                     imageBase64: base64Image,

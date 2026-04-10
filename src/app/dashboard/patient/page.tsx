@@ -290,10 +290,10 @@ export default function PatientDashboard() {
                       <Badge variant="outline" className="mt-2 border-accent text-accent text-[10px]">Secure Access</Badge>
                     </div>
                   </div>
-                  <div className="flex gap-3 mt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
                     <Button
                       variant="outline"
-                      className="flex-1 rounded-xl group"
+                      className="rounded-xl group"
                       onClick={() => router.push('/dashboard/patient/family')}
                     >
                       Health Records <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -304,6 +304,13 @@ export default function PatientDashboard() {
                       onClick={() => router.push('/dashboard/patient/meds')}
                     >
                       Meds <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl group"
+                      onClick={() => router.push('/dashboard/patient/certificates')}
+                    >
+                      Certificates <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
                     </Button>
                   </div>
                 </CardContent>

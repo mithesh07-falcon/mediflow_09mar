@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
-  Lock,
   Loader2,
   Heart,
   Eye,
@@ -17,7 +16,6 @@ import {
   ClipboardList,
   ArrowRight,
   ArrowLeft,
-  Info,
   ShieldCheck
 } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
@@ -29,12 +27,35 @@ import Link from "next/link";
 const ADMIN_EMAIL = "admin@mediflow.com";
 const ADMIN_PASS = "MediFlowAdmin2024!";
 
+type PortalRole = "patient" | "doctor" | "pharmacist" | "admin";
+
+const PARTICLES = Array.from({ length: 18 }, (_, index) => {
+  const seed = index + 1;
+  const left = ((seed * 37) % 100) + ((seed % 3) * 0.17);
+  const top = ((seed * 53) % 100) + ((seed % 5) * 0.11);
+  const size = 3 + (((seed * 19) % 50) / 10);
+  const delay = ((seed * 29) % 80) / 10;
+  const duration = 14 + (((seed * 23) % 100) / 10);
+
+  return {
+    id: index,
+    left: Number(left.toFixed(3)),
+    top: Number(top.toFixed(3)),
+    size: Number(size.toFixed(3)),
+    delay: Number(delay.toFixed(3)),
+    duration: Number(duration.toFixed(3)),
+  };
+});
+
 export default function MultiRoleLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<"patient" | "doctor" | "pharmacist" | "admin" | null>(null);
+  const [selectedRole, setSelectedRole] = useState<PortalRole | null>(null);
+  const [pointer, setPointer] = useState({ x: 50, y: 35 });
+
+  const particles = PARTICLES;
 
   useEffect(() => {
     const userStr = localStorage.getItem("mediflow_current_user");
@@ -45,6 +66,25 @@ export default function MultiRoleLoginPage() {
       }
     }
   }, [router]);
+
+  useEffect(() => {
+    let raf = 0;
+    const handlePointer = (event: MouseEvent) => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        setPointer({
+          x: (event.clientX / window.innerWidth) * 100,
+          y: (event.clientY / window.innerHeight) * 100,
+        });
+      });
+    };
+
+    window.addEventListener("mousemove", handlePointer);
+    return () => {
+      window.removeEventListener("mousemove", handlePointer);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
 
   const handleLogin = async (role: string, data: any) => {
     setLoading(true);
@@ -231,11 +271,11 @@ export default function MultiRoleLoginPage() {
 
   const PortalCard = ({ role, title, icon: Icon, color }: any) => (
     <Card className="rounded-[2.5rem] border border-transparent shadow-sm hover:shadow-xl transition-all duration-300 bg-white/95 dark:bg-zinc-900/80 dark:border-emerald-500/20 dark:shadow-[0_20px_55px_rgba(0,0,0,0.55)] backdrop-blur-sm group cursor-pointer" onClick={() => setSelectedRole(role)}>
-      <CardContent className="pt-10 pb-10 px-8 flex flex-col items-center text-center">
+      <CardContent className="pt-10 pb-10 px-8 min-h-[280px] flex flex-col items-center justify-center text-center">
         <div className={`h-16 w-16 rounded-2xl ${color || 'bg-primary/10 dark:bg-primary/20'} flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors`}>
           <Icon className={`h-8 w-8 ${color ? 'text-white' : 'text-primary'} group-hover:text-white`} />
         </div>
-        <h3 className="text-2xl font-headline font-bold mb-8">{title}</h3>
+        <h3 className="text-2xl font-headline font-bold mb-10">{title}</h3>
         <div className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] flex items-center gap-2 group-hover:gap-4 transition-all">
           Enter Portal <ArrowRight className="h-3 w-3" />
         </div>
@@ -244,7 +284,38 @@ export default function MultiRoleLoginPage() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F9FAFB] dark:bg-transparent">
+    <div className="relative min-h-screen flex flex-col bg-[#F9FAFB] dark:bg-[#0a0d12] overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div
+          className="absolute -top-24 -left-20 h-[420px] w-[420px] rounded-full bg-emerald-400/25 blur-3xl"
+          style={{ transform: `translate(${(pointer.x - 50) * 0.35}px, ${(pointer.y - 50) * 0.25}px)` }}
+        />
+        <div
+          className="absolute top-[32%] right-[-120px] h-[460px] w-[460px] rounded-full bg-blue-400/25 blur-3xl"
+          style={{ transform: `translate(${(pointer.x - 50) * -0.3}px, ${(pointer.y - 50) * 0.28}px)` }}
+        />
+        <div
+          className="absolute bottom-[-180px] left-[30%] h-[520px] w-[520px] rounded-full bg-indigo-400/20 blur-3xl"
+          style={{ transform: `translate(${(pointer.x - 50) * 0.2}px, ${(pointer.y - 50) * -0.2}px)` }}
+        />
+
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(16,185,129,0.12)_1px,transparent_1px)] [background-size:28px_28px] opacity-70" />
+
+        {particles.map((particle) => (
+          <span
+            key={particle.id}
+            className="absolute rounded-full bg-white/60 dark:bg-emerald-200/25"
+            style={{
+              left: `${particle.left}%`,
+              top: `${particle.top}%`,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              animation: `portalFloat ${particle.duration}s ease-in-out ${particle.delay}s infinite`,
+            }}
+          />
+        ))}
+      </div>
+
       <nav className="p-6 flex justify-between items-center fixed top-0 w-full z-50">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-primary" />
@@ -253,8 +324,8 @@ export default function MultiRoleLoginPage() {
         <ThemeToggle />
       </nav>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-6 pt-20">
-        <div className="text-center mb-12 flex flex-col items-center space-y-4">
+      <main className="flex-1 flex flex-col items-center justify-start p-6 pt-24 md:pt-28">
+        <div className="text-center mb-14 flex flex-col items-center space-y-4">
           <div className="h-20 w-20 rounded-full bg-gradient-to-br from-blue-400 to-primary flex items-center justify-center shadow-lg shadow-primary/20">
             <Stethoscope className="h-10 w-10 text-white" />
           </div>
@@ -265,24 +336,24 @@ export default function MultiRoleLoginPage() {
         </div>
 
         {!selectedRole ? (
-          <div className="w-full max-w-6xl space-y-8 animate-in fade-in zoom-in-95 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="w-full max-w-7xl space-y-10 animate-in fade-in zoom-in-95 duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7">
               <PortalCard role="patient" title="Patient Portal" icon={User} />
               <PortalCard role="doctor" title="Doctor Portal" icon={Stethoscope} />
               <PortalCard role="pharmacist" title="Pharmacy Portal" icon={ClipboardList} />
               <PortalCard role="admin" title="Admin Portal" icon={ShieldCheck} color="bg-blue-600" />
             </div>
-            <div className="flex justify-center pt-4">
+            <div className="flex justify-center pt-2">
               <Button
                 variant="outline"
-                className="h-24 w-full max-w-md rounded-[2.5rem] bg-zinc-900 hover:bg-zinc-800 dark:bg-[#121212] dark:hover:bg-[#1a1a1a] text-white border-none flex justify-center items-center gap-6 transition-transform hover:scale-105 shadow-2xl"
+                className="h-28 w-full max-w-xl rounded-[2.5rem] bg-zinc-900 hover:bg-zinc-800 dark:bg-[#121212] dark:hover:bg-[#1a1a1a] text-white border-none flex justify-center items-center gap-6 transition-transform hover:scale-105 shadow-2xl"
                 onClick={() => { setLoading(true); setTimeout(() => router.push('/elderly'), 200); }}
               >
                 <div className="h-12 w-12 bg-white/10 rounded-full flex items-center justify-center">
                   <Heart className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-left">
-                  <p className="text-2xl font-black leading-none uppercase">Senior Mode</p>
+                  <p className="text-5xl md:text-[2.2rem] font-black leading-none uppercase tracking-tight">Senior Mode</p>
                   <p className="text-xs opacity-60 uppercase tracking-widest font-bold mt-2">Mobile-First Accessibility</p>
                 </div>
               </Button>
@@ -321,26 +392,6 @@ export default function MultiRoleLoginPage() {
                   </Button>
                 </form>
 
-
-
-                {selectedRole === 'doctor' && (
-                  <div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-dashed border-emerald-300 dark:border-emerald-700 flex items-start gap-3">
-                    <Stethoscope className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                      <strong>Login Only:</strong> Doctor accounts are pre-registered by the hospital. No signup is available. Contact the Admin for credentials.
-                    </p>
-                  </div>
-                )}
-
-                {selectedRole === 'pharmacist' && (
-                  <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-dashed border-amber-300 dark:border-amber-700 flex items-start gap-3">
-                    <ClipboardList className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                      <strong>Login Only:</strong> Pharmacy accounts are created by the Admin. No signup is available.
-                    </p>
-                  </div>
-                )}
-
                 {selectedRole === 'patient' && (
                   <div className="mt-8 pt-8 border-t text-center">
                     <Link href="/register"><Button variant="outline" className="w-full h-14 rounded-2xl text-primary font-bold">Create Account</Button></Link>
@@ -354,6 +405,14 @@ export default function MultiRoleLoginPage() {
       <footer className="p-8 text-center text-[10px] text-muted-foreground/40 uppercase tracking-widest font-bold">
         Verified Medical Environment • ISO 27001 Secure
       </footer>
+
+      <style jsx global>{`
+        @keyframes portalFloat {
+          0% { transform: translate3d(0, 0, 0) scale(0.9); opacity: 0.35; }
+          50% { transform: translate3d(12px, -24px, 0) scale(1.15); opacity: 0.8; }
+          100% { transform: translate3d(0, 0, 0) scale(0.9); opacity: 0.35; }
+        }
+      `}</style>
     </div>
   );
 }

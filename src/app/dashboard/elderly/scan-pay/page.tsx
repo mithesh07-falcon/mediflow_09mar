@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Camera, QrCode, ArrowLeft, Loader2, CheckCircle2, Wallet, ShieldCheck, AlertCircle, ShoppingCart } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { appendPaymentReceipt } from "@/lib/elderly-portal";
 
 export default function ElderScanPayPage() {
   const router = useRouter();
@@ -80,6 +80,13 @@ export default function ElderScanPayPage() {
         time: new Date().toISOString()
       }));
 
+      appendPaymentReceipt({
+        shop: shopName,
+        amount,
+        method: "scan-pay",
+        status: "success",
+      });
+
       setIsProcessing(false);
       setStep("success");
       
@@ -116,12 +123,20 @@ export default function ElderScanPayPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 flex flex-col space-y-12 touch-manipulation">
       <header className="flex items-center justify-between border-b-8 border-black pb-8">
-        <Button 
-            className="h-28 px-12 text-4xl font-black bg-black text-white rounded-3xl border-8 border-black flex items-center gap-6"
-            onClick={() => router.push('/dashboard/elderly')}
-        >
-          <ArrowLeft className="h-14 w-14" /> BACK
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button 
+              className="h-28 px-12 text-4xl font-black bg-black text-white rounded-3xl border-8 border-black flex items-center gap-6"
+              onClick={() => router.push('/dashboard/elderly')}
+          >
+            <ArrowLeft className="h-14 w-14" /> BACK
+          </Button>
+          <Button
+            className="h-28 px-10 text-3xl font-black bg-white text-black rounded-3xl border-8 border-black"
+            onClick={() => router.push('/dashboard/elderly/payments')}
+          >
+            RECEIPTS
+          </Button>
+        </div>
         <div className="flex items-center gap-6 bg-white px-8 py-4 rounded-3xl border-4 border-black">
             <Wallet className="h-12 w-12 text-slate-400" />
             <span className="text-4xl font-black">₹{walletBalance.toLocaleString()}</span>

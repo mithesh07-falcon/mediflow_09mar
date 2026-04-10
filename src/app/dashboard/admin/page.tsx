@@ -46,6 +46,23 @@ const TIME_SLOTS_PRESET = [
   "04:00 PM", "04:30 PM", "05:00 PM"
 ];
 
+const PREDEFINED_DOCTOR_SPECIALIZATIONS = [
+  "General Medicine",
+  "Cardiology",
+  "Orthopedics",
+  "Ophthalmology",
+  "Dentistry",
+  "ENT",
+  "Gastroenterology",
+  "Neurology",
+  "Dermatology",
+  "Pediatrics",
+  "Pulmonology",
+  "Endocrinology",
+];
+
+const CUSTOM_SPECIALIZATION_OPTION = "__custom__";
+
 export default function FormalAdminDashboard() {
   const { toast } = useToast();
   // CONSTRAINT 10: Only admins can access this portal
@@ -65,6 +82,8 @@ export default function FormalAdminDashboard() {
   const [staff, setStaff] = useState<any[]>([]);
   const [newStaff, setNewStaff] = useState({ name: "", email: "", password: "", role: "doctor", specialization: "", license: "", phone: "+91 " });
   const [generatedCreds, setGeneratedCreds] = useState<any>(null);
+  const [selectedSpecializationOption, setSelectedSpecializationOption] = useState("");
+  const [customSpecialization, setCustomSpecialization] = useState("");
 
   // Complaints State
   const [complaints, setComplaints] = useState<any[]>([]);
@@ -242,9 +261,18 @@ export default function FormalAdminDashboard() {
 
   const handleOnboardStaff = async () => {
     const cleanPhone = newStaff.phone.replace(/\s/g, '');
+    const resolvedDoctorSpecialization = selectedSpecializationOption === CUSTOM_SPECIALIZATION_OPTION
+      ? customSpecialization.trim()
+      : selectedSpecializationOption.trim();
+
     // CONSTRAINT 7: Name must be letters only
     if (!newStaff.name.trim() || /[^a-zA-Z\s.]/.test(newStaff.name)) {
       toast({ variant: "destructive", title: "Invalid Name", description: "Name must contain only letters, spaces, and periods." });
+      return;
+    }
+
+    if (newStaff.role === "doctor" && !resolvedDoctorSpecialization) {
+      toast({ variant: "destructive", title: "Specialization Required", description: "Select a predefined specialization or add a custom one." });
       return;
     }
     // --- CONSTRAINT: Must be @mediflow.com domain ---
@@ -275,13 +303,16 @@ export default function FormalAdminDashboard() {
     }
     setLoading(true);
     try {
+      const staffPayload = {
+        ...newStaff,
+        specialization: newStaff.role === "doctor" ? resolvedDoctorSpecialization : "",
+        phone: cleanPhone,
+      };
+
       const res = await fetch('/api/admin/staff', {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newStaff,
-          phone: newStaff.phone.replace(/\s/g, '')
-        })
+        body: JSON.stringify(staffPayload)
       });
       const data = await res.json();
       if (res.ok) {
@@ -292,9 +323,9 @@ export default function FormalAdminDashboard() {
         // even if Vercel serverless function memory resets.
         try {
           const localStaff = JSON.parse(localStorage.getItem("mediflow_staff") || "[]");
-          if (!localStaff.some((s: any) => s.email.toLowerCase() === newStaff.email.toLowerCase())) {
+          if (!localStaff.some((s: any) => s.email.toLowerCase() === staffPayload.email.toLowerCase())) {
             localStaff.push({
-              ...newStaff,
+              ...staffPayload,
               id: Date.now(),
               passwordPlain: newStaff.password,
               password: newStaff.password
@@ -308,6 +339,8 @@ export default function FormalAdminDashboard() {
         } catch(e) {}
         
         setNewStaff({ name: "", email: "", password: "", role: "doctor", specialization: "", license: "", phone: "+91 " });
+        setSelectedSpecializationOption("");
+        setCustomSpecialization("");
         fetchData();
         toast({ title: "Success", description: `Credential generated and securely hashed in registry.` });
       } else {
@@ -605,7 +638,16 @@ export default function FormalAdminDashboard() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Portal Role</Label>
-                      <Select value={newStaff.role} onValueChange={v => setNewStaff({ ...newStaff, role: v })}>
+                      <Select
+                        value={newStaff.role}
+                        onValueChange={v => {
+                          setNewStaff({ ...newStaff, role: v, specialization: v === "doctor" ? newStaff.specialization : "" });
+                          if (v !== "doctor") {
+                            setSelectedSpecializationOption("");
+                            setCustomSpecialization("");
+                          }
+                        }}
+                      >
                         <SelectTrigger className="h-14 rounded-2xl border-2 font-bold"><SelectValue /></SelectTrigger>
                         <SelectContent className="rounded-xl border-2">
                           <SelectItem value="doctor">Medical Doctor</SelectItem>
@@ -639,7 +681,36 @@ export default function FormalAdminDashboard() {
                   {newStaff.role === 'doctor' && (
                     <div className="space-y-2 animate-in slide-in-from-top-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Specialization</Label>
-                      <Input value={newStaff.specialization} onChange={e => setNewStaff({ ...newStaff, specialization: e.target.value })} className="h-14 rounded-2xl border-2 font-bold" />
+                      <Select
+                        value={selectedSpecializationOption}
+                        onValueChange={(value) => {
+                          setSelectedSpecializationOption(value);
+                          if (value !== CUSTOM_SPECIALIZATION_OPTION) {
+                            setCustomSpecialization("");
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-14 rounded-2xl border-2 font-bold">
+                          <SelectValue placeholder="Select a specialization" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-2">
+                          {PREDEFINED_DOCTOR_SPECIALIZATIONS.map((specialization) => (
+                            <SelectItem key={specialization} value={specialization}>
+                              {specialization}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={CUSTOM_SPECIALIZATION_OPTION}>Custom (Type New)</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {selectedSpecializationOption === CUSTOM_SPECIALIZATION_OPTION && (
+                        <Input
+                          value={customSpecialization}
+                          onChange={e => setCustomSpecialization(e.target.value)}
+                          placeholder="Enter custom specialization"
+                          className="h-14 rounded-2xl border-2 font-bold"
+                        />
+                      )}
                     </div>
                   )}
 
@@ -657,7 +728,20 @@ export default function FormalAdminDashboard() {
                   <Button
                     className="w-full h-16 rounded-[2rem] bg-zinc-900 text-lg font-black tracking-tighter shadow-2xl shadow-zinc-200 mt-4"
                     onClick={handleOnboardStaff}
-                    disabled={loading || !!emailError || newStaff.password.length < 8 || !/[0-9]/.test(newStaff.password) || !/[!@#$%^&*]/.test(newStaff.password) || !/[A-Z]/.test(newStaff.password) || !/[a-z]/.test(newStaff.password)}
+                    disabled={
+                      loading ||
+                      !!emailError ||
+                      newStaff.password.length < 8 ||
+                      !/[0-9]/.test(newStaff.password) ||
+                      !/[!@#$%^&*]/.test(newStaff.password) ||
+                      !/[A-Z]/.test(newStaff.password) ||
+                      !/[a-z]/.test(newStaff.password) ||
+                      (newStaff.role === "doctor" && !(
+                        selectedSpecializationOption === CUSTOM_SPECIALIZATION_OPTION
+                          ? customSpecialization.trim()
+                          : selectedSpecializationOption.trim()
+                      ))
+                    }
                   >
                     {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : "GENERATE & SYNC CREDS"}
                   </Button>
