@@ -178,7 +178,8 @@ export default function RegisterPage() {
           guardianName,
           guardianPhone: guardianPhone.replace(/\s/g, ''),
           guardianRelationship,
-          language: selectedLanguage
+          language: selectedLanguage,
+          user_type: isElderly ? 'elderly' : 'normal'
         }),
       });
 
@@ -206,7 +207,8 @@ export default function RegisterPage() {
         guardianName,
         guardianPhone: guardianPhone.replace(/\s/g, ''),
         guardianRelationship,
-        language: selectedLanguage
+        language: selectedLanguage,
+        user_type: isElderly ? 'elderly' : 'normal'
       });
       localStorage.setItem("mediflow_patients", JSON.stringify(saved));
       

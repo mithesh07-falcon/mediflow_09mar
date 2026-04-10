@@ -148,7 +148,10 @@ export default function LoginPage() {
           return;
         }
 
-        localStorage.setItem("mediflow_current_user", JSON.stringify({ ...patient, role: 'patient' }));
+        const userType = patient.user_type || (patient.isElderly || (patient.age && parseInt(patient.age) >= 60) ? 'elderly' : 'normal');
+        const currentUser = { ...patient, role: 'patient', user_type: userType, isElderly: userType === 'elderly' };
+
+        localStorage.setItem("mediflow_current_user", JSON.stringify(currentUser));
         // CONSTRAINT 16: Set active session
         localStorage.setItem("mediflow_active_session", JSON.stringify({
           email: patient.email, role: 'patient', sessionId: `${patient.email}_${Date.now()}`, timestamp: Date.now()
@@ -156,7 +159,8 @@ export default function LoginPage() {
 
         setLoading(false);
         toast({ title: "Access Granted", description: `Welcome back, ${patient.firstName}!` });
-        router.push('/dashboard/patient');
+        const target = currentUser.isElderly ? '/dashboard/elderly' : '/dashboard/patient';
+        router.push(target);
       } catch (err: any) {
         console.error("Patient Login Error:", err);
         toast({

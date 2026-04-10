@@ -22,6 +22,7 @@ export interface PatientRecord {
     guardianPhone?: string;
     guardianRelationship?: string;
     language?: string;
+    user_type?: 'normal' | 'elderly';
 }
 
 // ── VERCEL HYBRID MEMORY POOL ───────────────────────────────────────────
@@ -44,6 +45,7 @@ const SEED_PATIENTS: PatientRecord[] = [
         age: "32",
         password: "Password123!",
         registeredAt: "2024-01-01T00:00:00.000Z",
+        user_type: 'normal',
     },
 ];
 
@@ -187,7 +189,8 @@ export async function POST(request: Request) {
                 guardianName,
                 guardianPhone,
                 guardianRelationship,
-                language
+                language,
+                user_type
             } = body;
             console.log(`[API:Patients:Register] Attempting registration for: ${email}`);
 
@@ -291,6 +294,8 @@ export async function POST(request: Request) {
                 );
             }
 
+            const userType = user_type || (parseInt(age) >= 60 ? 'elderly' : 'normal');
+
             const newPatient: PatientRecord = {
                 id: Date.now(),
                 firstName,
@@ -303,7 +308,8 @@ export async function POST(request: Request) {
                 guardianName,
                 guardianPhone,
                 guardianRelationship,
-                language: language || "English"
+                language: language || "English",
+                user_type: userType
             };
 
             localPatients.push(newPatient);

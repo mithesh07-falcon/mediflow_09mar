@@ -17,6 +17,9 @@ interface Medication {
   name: string;
   dose: string;
   timeLabel: string;
+  scheduledHour?: number;
+  scheduledMinute?: number;
+  isCustomTime?: boolean;
   taken: boolean;
   instruction?: string;
 }
@@ -79,7 +82,12 @@ export function MedicationList() {
             id: m.id,
             name: m.name,
             dose: m.dosage,
-            timeLabel: m.timeLabel,
+            timeLabel: m.timeLabel === "Custom" 
+              ? `${String(m.scheduledHour || 0).padStart(2, '0')}:${String(m.scheduledMinute || 0).padStart(2, '0')}`
+              : m.timeLabel,
+            scheduledHour: m.scheduledHour,
+            scheduledMinute: m.scheduledMinute,
+            isCustomTime: m.isCustomTime,
             instruction: m.instructions || "",
             taken: JSON.parse(localStorage.getItem(`med_taken_${m.id}`) || "false")
           }))
@@ -107,28 +115,7 @@ export function MedicationList() {
     }
   };
 
-  // Alert Reminder System
-  useEffect(() => {
-    if (loading || meds.length === 0) return;
-
-    const alertInterval = setInterval(() => {
-      meds.forEach(med => {
-        if (!med.taken) {
-          const currentCount = parseInt(localStorage.getItem(`med_alert_count_${med.id}`) || "0");
-          if (currentCount < maxAlerts) {
-            toast({
-              title: "Medication Reminder",
-              description: `⚠️ Please take ${med.name} (${med.dose}). Alert ${currentCount + 1} of ${maxAlerts}`,
-              variant: "destructive",
-            });
-            localStorage.setItem(`med_alert_count_${med.id}`, (currentCount + 1).toString());
-          }
-        }
-      });
-    }, 15000); // Trigger every 15 seconds for demonstration purposes
-
-    return () => clearInterval(alertInterval);
-  }, [meds, loading, maxAlerts, toast]);
+  // Reminder logic moved to the centralized GlobalAlertListener to avoid duplicate alerts.
 
   const speakMed = (med: Medication) => {
     if (!window.speechSynthesis) return;

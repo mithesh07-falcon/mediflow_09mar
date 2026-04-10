@@ -113,6 +113,109 @@ const BODY_PART_MAP: Record<string, {
     },
 };
 
+type SymptomKey = keyof typeof BODY_PART_MAP;
+
+const TRANSCRIPT_RULES: Record<SymptomKey, { strong: string[]; moderate: string[] }> = {
+    heart: {
+        strong: ["chest pain", "heart pain", "palpitation", "shortness of breath", "breathing problem", "angina"],
+        moderate: ["heart", "chest", "dil", "seena", "bp high", "blood pressure"],
+    },
+    bones: {
+        strong: ["joint pain", "knee pain", "back pain", "shoulder pain", "fracture", "swelling in joint"],
+        moderate: ["bone", "joint", "haddi", "knee", "back", "shoulder", "muscle", "arthritis", "ortho"],
+    },
+    eyes: {
+        strong: ["blurred vision", "eye pain", "cannot see", "vision loss"],
+        moderate: ["eye", "vision", "aankh", "nazar", "sight", "blur"],
+    },
+    fever: {
+        strong: ["high fever", "viral fever", "high temperature"],
+        moderate: ["fever", "cold", "cough", "flu", "bukhaar", "sardi", "weakness", "infection"],
+    },
+    dental: {
+        strong: ["tooth pain", "toothache", "gum bleeding", "jaw pain"],
+        moderate: ["tooth", "teeth", "gum", "daant", "jaw", "oral"],
+    },
+    ent: {
+        strong: ["ear pain", "sore throat", "blocked nose", "hearing loss"],
+        moderate: ["ear", "nose", "throat", "kaan", "naak", "gala", "sinus", "ent"],
+    },
+    stomach: {
+        strong: ["stomach pain", "abdominal pain", "severe acidity", "vomiting", "loose motion"],
+        moderate: ["stomach", "belly", "pait", "digestion", "gas", "acid", "constipation", "diarrhea", "ulcer"],
+    },
+    neuro: {
+        strong: ["severe headache", "one side weakness", "seizure", "cannot speak", "blackout"],
+        moderate: ["headache", "brain", "head", "sar", "chakkar", "dizzy", "migraine", "numb", "nerve"],
+    },
+    skin: {
+        strong: ["skin rash", "severe itching", "skin allergy", "red patches"],
+        moderate: ["skin", "rash", "itch", "chamdi", "khujli", "allergy", "pimple", "boil"],
+    },
+};
+
+const EMERGENCY_HINTS = [
+    "chest pain",
+    "difficulty breathing",
+    "shortness of breath",
+    "fainting",
+    "unconscious",
+    "seizure",
+    "slurred speech",
+    "severe bleeding",
+    "one side weakness",
+];
+
+const SPECIALTY_ALIASES: Record<string, string[]> = {
+    Cardiology: ["cardiology", "cardiologist", "heart"],
+    Orthopedics: ["orthopedics", "orthopedic", "bone", "joint", "ortho"],
+    Ophthalmology: ["ophthalmology", "ophthalmologist", "eye"],
+    Dentistry: ["dentistry", "dentist", "dental"],
+    ENT: ["ent", "ear nose throat"],
+    Gastroenterology: ["gastroenterology", "gastro", "stomach", "digestive"],
+    Neurology: ["neurology", "neurologist", "brain", "nerve"],
+    Dermatology: ["dermatology", "dermatologist", "skin"],
+    General: ["general", "general medicine", "general physician", "physician"],
+};
+
+function inferBodyPartFromTranscript(transcript: string): { id: SymptomKey; score: number } | null {
+    if (!transcript.trim()) return null;
+
+    let best: { id: SymptomKey; score: number } | null = null;
+    let secondBest = 0;
+
+    for (const [id, rules] of Object.entries(TRANSCRIPT_RULES) as [SymptomKey, { strong: string[]; moderate: string[] }][]) {
+        let score = 0;
+        rules.strong.forEach((keyword) => {
+            if (transcript.includes(keyword)) score += 3;
+        });
+        rules.moderate.forEach((keyword) => {
+            if (transcript.includes(keyword)) score += 1;
+        });
+
+        if (!best || score > best.score) {
+            secondBest = best?.score || 0;
+            best = { id, score };
+        } else if (score > secondBest) {
+            secondBest = score;
+        }
+    }
+
+    // Reject low-signal or near-tie outcomes to avoid false overrides.
+    if (!best || best.score < 2 || best.score - secondBest <= 1) return null;
+    return best;
+}
+
+function normalizeSpec(spec: string): string {
+    const normalized = (spec || "").toLowerCase().trim();
+    for (const [canonical, aliases] of Object.entries(SPECIALTY_ALIASES)) {
+        if (aliases.some((alias) => normalized === alias || normalized.includes(alias))) {
+            return canonical;
+        }
+    }
+    return spec;
+}
+
 /**
  * Find the best doctor name from the staff list for a given specialty key.
  */
@@ -131,32 +234,32 @@ function findDoctorForSpec(specKey: string, staffJson?: string): string {
 
     if (staffJson) {
         try {
-            const staffList: { name: string; spec: string }[] = JSON.parse(staffJson);
-            const match = staffList.find(
-                (s) => s.spec?.toLowerCase().trim() === specKey.toLowerCase().trim()
-            );
+            const staffList: { name: string; spec?: string; specialization?: string }[] = JSON.parse(staffJson);
+            const target = normalizeSpec(specKey);
+
+            const match = staffList.find((s) => {
+                const rawSpec = s.spec || s.specialization || "";
+                return normalizeSpec(rawSpec) === target;
+            });
+
             if (match) return match.name;
+
+            const looseMatch = staffList.find((s) => {
+                const rawSpec = (s.spec || s.specialization || "").toLowerCase();
+                return rawSpec.includes(target.toLowerCase());
+            });
+            if (looseMatch) return looseMatch.name;
         } catch { /* ignore parse errors */ }
     }
 
-    return defaultDoctors[specKey] || "Dr. Taylor";
+    const normalized = normalizeSpec(specKey);
+    return defaultDoctors[normalized] || "Dr. Taylor";
 }
 
 export async function detectBodyPart(input: AIBodyPartDetectionInput): Promise<AIBodyPartDetectionOutput> {
     const transcript = (input.voiceTranscript || "").toLowerCase();
-    
-    // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI quota/errors) ──────────────
-    const overrides: Record<string, string[]> = {
-        heart: ["heart", "chest", "chest pain", "dil", "seena", "beats", "palpitation", "high blood pressure", "heart pain", "cardio", "breathing"],
-        bones: ["bone", "joint", "haddi", "knee", "back", "ghutna", "kamar", "muscle", "pain", "leg pain", "joint pains", "legs", "hands", "walking", "stiff", "arthritis", "fracture", "shoulder", "ortho"],
-        eyes: ["eye", "vision", "aankh", "nazar", "chashma", "blur", "eye pain", "red eye", "sight", "ophthal", "blind", "seeing"],
-        dental: ["tooth", "teeth", "gum", "daant", "munh", "jaw", "toothache", "dentist", "oral", "cavity"],
-        ent: ["ear", "nose", "throat", "kaan", "naak", "gala", "hearing", "kan", "ear pain", "sinus", "nasal", "deaf", "sore throat"],
-        stomach: ["stomach", "belly", "pait", "gas", "digestion", "acid", "stomach pain", "constipation", "diarrhea", "vomit", "ulcer", "gastric"],
-        neuro: ["headache", "brain", "sar", "head", "chakkar", "dizzy", "migraine", "nerve", "numb", "seizure", "shaking", "memory"],
-        skin: ["skin", "rash", "itch", "chamdi", "khujli", "scar", "allergy", "dermat", "pimple", "boil"],
-        fever: ["fever", "cold", "bukhaar", "sardi", "cough", "flu", "tiredness", "weakness", "infection", "medicine", "feverish", "high temperature"]
-    };
+    const transcriptInference = inferBodyPartFromTranscript(transcript);
+    const hasEmergencyHint = EMERGENCY_HINTS.some((keyword) => transcript.includes(keyword));
 
     try {
         const result = await ai.generate({
@@ -230,22 +333,37 @@ User text: "${input.voiceTranscript || "No description provided."}"
 
         const output = result.output!;
 
-        // ── ROBUST KEYWORD OVERRIDE (Failsafe for AI) ─────────────────────────
-        for (const [id, keys] of Object.entries(overrides)) {
-            if (keys.some(k => transcript.includes(k.toLowerCase()))) {
-                if (output.symptomId === "fever" || output.symptomId !== id) {
-                    console.log(`[AI:Override] Transcript "${transcript}" triggered ${id} override.`);
-                    const entry = BODY_PART_MAP[id as keyof typeof BODY_PART_MAP];
-                    output.symptomId = entry.symptomId;
-                    output.specialistType = entry.specialistType;
-                    output.predictedDoctorName = findDoctorForSpec(entry.specKey, input.staffList);
-                }
+        const aiSymptom = (output.symptomId || "fever") as SymptomKey;
+        const aiConfidence = Number.isFinite(output.confidence) ? output.confidence : 0.5;
+        const aiLooksGeneric = aiSymptom === "fever" || /general/i.test(output.specialistType || "");
+
+        let finalSymptom: SymptomKey = aiSymptom;
+        if (transcriptInference) {
+            const shouldOverrideWithRules = aiLooksGeneric || aiConfidence < 0.7 || transcriptInference.id !== aiSymptom;
+            if (shouldOverrideWithRules && transcriptInference.score >= 3) {
+                finalSymptom = transcriptInference.id;
             }
         }
 
-        if (!input.staffList?.includes(output.predictedDoctorName)) {
-            const specKey = BODY_PART_MAP[output.symptomId].specKey;
-            output.predictedDoctorName = findDoctorForSpec(specKey, input.staffList);
+        const mapped = BODY_PART_MAP[finalSymptom];
+        output.symptomId = mapped.symptomId;
+        output.specialistType = mapped.specialistType;
+        output.recommended_doctor = mapped.specialistType;
+        output.predictedDoctorName = findDoctorForSpec(mapped.specKey, input.staffList);
+        output.confidence = Math.max(0, Math.min(1, Number(output.confidence || 0.6)));
+
+        if (hasEmergencyHint) {
+            output.risk_level = "high";
+            output.emergency = true;
+            if (!output.next_step?.trim()) {
+                output.next_step = "Seek emergency care immediately.";
+            }
+        }
+
+        if (!output.reason?.trim()) output.reason = mapped.reason;
+        if (!output.message?.trim()) output.message = mapped.reason;
+        if (!Array.isArray(output.detectedSymptoms) || output.detectedSymptoms.length === 0) {
+            output.detectedSymptoms = mapped.detectedSymptoms;
         }
 
         return output;
@@ -256,9 +374,9 @@ User text: "${input.voiceTranscript || "No description provided."}"
             stack: err?.stack,
             error: err
         });
-        // Fallback logic remains similar but adapted to the new schema
-        const fallbackId = transcript.includes("chest") ? "heart" : transcript.includes("stomach") ? "stomach" : "fever";
-        const entry = BODY_PART_MAP[fallbackId as keyof typeof BODY_PART_MAP];
+        const fallbackId: SymptomKey = transcriptInference?.id || "fever";
+        const entry = BODY_PART_MAP[fallbackId];
+        const fallbackEmergency = hasEmergencyHint;
         
         return {
             symptomId: entry.symptomId,
@@ -273,12 +391,12 @@ User text: "${input.voiceTranscript || "No description provided."}"
             onset: "unknown",
             triggers: null,
             additional_symptoms: [],
-            risk_level: "low",
-            emergency: false,
+            risk_level: fallbackEmergency ? "high" : "low",
+            emergency: fallbackEmergency,
             recommended_doctor: entry.specialistType,
             confidence: 0.5,
             message: entry.reason,
-            next_step: "Please consult a general physician.",
+            next_step: fallbackEmergency ? "Seek emergency care immediately." : "Please consult a general physician.",
             mismatch: false,
             warning: "This is not a medical diagnosis. Please consult a doctor."
         };

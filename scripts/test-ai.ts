@@ -4,7 +4,7 @@ import * as path from 'path';
 dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 
 async function main() {
-    const key = process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+    const key = process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
     console.log("Checking models via direct REST...");
     try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
