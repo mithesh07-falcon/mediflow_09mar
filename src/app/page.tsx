@@ -229,14 +229,13 @@ export default function MultiRoleLoginPage() {
     }
   };
 
-  const PortalCard = ({ role, title, description, icon: Icon, color }: any) => (
-    <Card className="rounded-[2.5rem] border-none shadow-sm hover:shadow-xl transition-all duration-300 bg-white group cursor-pointer" onClick={() => setSelectedRole(role)}>
+  const PortalCard = ({ role, title, icon: Icon, color }: any) => (
+    <Card className="rounded-[2.5rem] border border-transparent shadow-sm hover:shadow-xl transition-all duration-300 bg-white/95 dark:bg-zinc-900/80 dark:border-emerald-500/20 dark:shadow-[0_20px_55px_rgba(0,0,0,0.55)] backdrop-blur-sm group cursor-pointer" onClick={() => setSelectedRole(role)}>
       <CardContent className="pt-10 pb-10 px-8 flex flex-col items-center text-center">
-        <div className={`h-16 w-16 rounded-2xl ${color || 'bg-primary/5'} flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors`}>
+        <div className={`h-16 w-16 rounded-2xl ${color || 'bg-primary/10 dark:bg-primary/20'} flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors`}>
           <Icon className={`h-8 w-8 ${color ? 'text-white' : 'text-primary'} group-hover:text-white`} />
         </div>
-        <h3 className="text-2xl font-headline font-bold mb-4">{title}</h3>
-        <p className="text-xs text-muted-foreground leading-relaxed mb-8 min-h-[40px]">{description}</p>
+        <h3 className="text-2xl font-headline font-bold mb-8">{title}</h3>
         <div className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] flex items-center gap-2 group-hover:gap-4 transition-all">
           Enter Portal <ArrowRight className="h-3 w-3" />
         </div>
@@ -245,7 +244,7 @@ export default function MultiRoleLoginPage() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F9FAFB] dark:bg-zinc-950">
+    <div className="min-h-screen flex flex-col bg-[#F9FAFB] dark:bg-transparent">
       <nav className="p-6 flex justify-between items-center fixed top-0 w-full z-50">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-primary" />
@@ -260,7 +259,7 @@ export default function MultiRoleLoginPage() {
             <Stethoscope className="h-10 w-10 text-white" />
           </div>
           <div className="flex flex-col items-center">
-            <h1 className="text-5xl font-headline font-bold text-[#1F2937] tracking-tight">MediFlow</h1>
+            <h1 className="text-5xl font-headline font-bold text-[#1F2937] dark:text-zinc-50 tracking-tight">MediFlow</h1>
             <p className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mt-1">Integrated Clinical Systems</p>
           </div>
         </div>
@@ -268,15 +267,15 @@ export default function MultiRoleLoginPage() {
         {!selectedRole ? (
           <div className="w-full max-w-6xl space-y-8 animate-in fade-in zoom-in-95 duration-500">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <PortalCard role="patient" title="Patient Portal" description="Manage family health and book appointments." icon={User} />
-              <PortalCard role="doctor" title="Doctor Portal" description="Access patient records and schedules." icon={Stethoscope} />
-              <PortalCard role="pharmacist" title="Pharmacy Portal" description="Verify digital prescriptions and manage inventory." icon={ClipboardList} />
-              <PortalCard role="admin" title="Admin Portal" description="Staff governance, master inventory, and schedules." icon={ShieldCheck} color="bg-blue-600" />
+              <PortalCard role="patient" title="Patient Portal" icon={User} />
+              <PortalCard role="doctor" title="Doctor Portal" icon={Stethoscope} />
+              <PortalCard role="pharmacist" title="Pharmacy Portal" icon={ClipboardList} />
+              <PortalCard role="admin" title="Admin Portal" icon={ShieldCheck} color="bg-blue-600" />
             </div>
             <div className="flex justify-center pt-4">
               <Button
                 variant="outline"
-                className="h-24 w-full max-w-md rounded-[2.5rem] bg-zinc-900 hover:bg-zinc-800 text-white border-none flex justify-center items-center gap-6 transition-transform hover:scale-105 shadow-2xl"
+                className="h-24 w-full max-w-md rounded-[2.5rem] bg-zinc-900 hover:bg-zinc-800 dark:bg-[#121212] dark:hover:bg-[#1a1a1a] text-white border-none flex justify-center items-center gap-6 transition-transform hover:scale-105 shadow-2xl"
                 onClick={() => { setLoading(true); setTimeout(() => router.push('/elderly'), 200); }}
               >
                 <div className="h-12 w-12 bg-white/10 rounded-full flex items-center justify-center">
@@ -294,7 +293,7 @@ export default function MultiRoleLoginPage() {
             <Button variant="ghost" className="mb-8 text-[10px] font-bold uppercase tracking-widest text-muted-foreground" onClick={() => setSelectedRole(null)}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back to Portals
             </Button>
-            <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white/95 p-4">
+            <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white/95 dark:bg-zinc-900/85 dark:border dark:border-emerald-500/20 p-4 backdrop-blur-sm">
               <CardHeader className="text-center">
                 <CardTitle className="text-3xl font-headline font-bold capitalize">{selectedRole} Access</CardTitle>
                 <CardDescription>Enter clinical credentials to continue.</CardDescription>
@@ -306,7 +305,7 @@ export default function MultiRoleLoginPage() {
                 }}>
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground pl-1">Email / ID</Label>
-                    <Input name="email" type="email" placeholder={selectedRole === 'patient' ? "yourname@gmail.com" : selectedRole === 'admin' ? "admin@mediflow.com" : selectedRole === 'doctor' ? "dr.smith.neuro@mediflow.com" : `pharmacist.john@mediflow.com`} required className="h-14 rounded-2xl border-2" />
+                    <Input name="email" type="email" required className="h-14 rounded-2xl border-2" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground pl-1">Password</Label>
