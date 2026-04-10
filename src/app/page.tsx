@@ -224,6 +224,7 @@ export default function MultiRoleLoginPage() {
 
       // FALLBACK: If server doesn't have the user (happens on Vercel resets), check local storage
       if (!patient) {
+        await GlobalSync.pullPatients();
         const localPatients = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
         const matched = localPatients.find((p: any) => p.email.toLowerCase() === email && p.password === password);
         if (matched) {

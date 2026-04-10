@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { GlobalSync } from "@/lib/sync-service";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,30 +52,51 @@ export default function DoctorMedicationReportPage() {
 
   const [reports, setReports] = useState<DoctorPrescriptionRecord[]>([]);
   const [search, setSearch] = useState("");
+  const [syncing, setSyncing] = useState(true);
 
   useEffect(() => {
-    const currentUserRaw = localStorage.getItem("mediflow_current_user") || "{}";
-    let currentUser: any = {};
-    try {
-      currentUser = JSON.parse(currentUserRaw);
-    } catch {
-      currentUser = {};
-    }
+    let cancelled = false;
 
-    const allPrescriptions = safeParseArray<any>("mediflow_prescriptions");
+    const loadReports = async () => {
+      setSyncing(true);
+      try {
+        await GlobalSync.pullMedicalData();
+      } catch {
+        // Non-blocking fallback to local cache
+      }
 
-    const normalized: DoctorPrescriptionRecord[] = allPrescriptions
-      .filter((rx) => String(rx?.doctorEmail || "").toLowerCase() === String(currentUser?.email || "").toLowerCase())
-      .map((rx, index) => ({
-        id: String(rx?.id || `RX-${index + 1}`),
-        patientName: String(rx?.patientName || "Unknown Patient"),
-        doctorName: String(rx?.doctorName || currentUser?.firstName || "Unknown Doctor"),
-        date: String(rx?.date || "No date"),
-        notes: String(rx?.notes || "No clinical notes."),
-        medications: Array.isArray(rx?.medications) ? rx.medications : [],
-      }));
+      const currentUserRaw = localStorage.getItem("mediflow_current_user") || "{}";
+      let currentUser: any = {};
+      try {
+        currentUser = JSON.parse(currentUserRaw);
+      } catch {
+        currentUser = {};
+      }
 
-    setReports(normalized);
+      const allPrescriptions = safeParseArray<any>("mediflow_prescriptions");
+
+      const normalized: DoctorPrescriptionRecord[] = allPrescriptions
+        .filter((rx) => String(rx?.doctorEmail || "").toLowerCase() === String(currentUser?.email || "").toLowerCase())
+        .map((rx, index) => ({
+          id: String(rx?.id || `RX-${index + 1}`),
+          patientName: String(rx?.patientName || "Unknown Patient"),
+          doctorName: String(rx?.doctorName || currentUser?.firstName || "Unknown Doctor"),
+          date: String(rx?.date || "No date"),
+          notes: String(rx?.notes || "No clinical notes."),
+          medications: Array.isArray(rx?.medications) ? rx.medications : [],
+        }));
+
+      if (!cancelled) {
+        setReports(normalized);
+        setSyncing(false);
+      }
+    };
+
+    loadReports();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredReports = useMemo(() => {
@@ -173,7 +195,7 @@ export default function DoctorMedicationReportPage() {
           <CardContent className="space-y-3">
             {filteredReports.length === 0 ? (
               <div className="p-10 border-2 border-dashed rounded-2xl text-center text-muted-foreground">
-                No medication reports found.
+                {syncing ? "Syncing cloud records..." : "No medication reports found."}
               </div>
             ) : (
               filteredReports.map((report) => (

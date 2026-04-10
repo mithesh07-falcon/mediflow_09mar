@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { GlobalSync } from "@/lib/sync-service";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -53,40 +54,61 @@ export default function PatientMedicationReportPage() {
 
   const [reports, setReports] = useState<PrescriptionRecord[]>([]);
   const [search, setSearch] = useState("");
+  const [syncing, setSyncing] = useState(true);
 
   useEffect(() => {
-    const currentUserRaw = localStorage.getItem("mediflow_current_user") || "{}";
-    let currentUser: any = {};
-    try {
-      currentUser = JSON.parse(currentUserRaw);
-    } catch {
-      currentUser = {};
-    }
+    let cancelled = false;
 
-    const allFamily = safeParseArray<any>("mediflow_family_members");
-    const memberNames = allFamily
-      .filter((m) => m.userId === currentUser.email)
-      .map((m) => String(m.name || "").toLowerCase());
+    const loadReports = async () => {
+      setSyncing(true);
+      try {
+        await GlobalSync.pullMedicalData();
+      } catch {
+        // Non-blocking fallback to local cache
+      }
 
-    if (memberNames.length === 0 && currentUser.firstName) {
-      memberNames.push(String(currentUser.firstName).toLowerCase());
-    }
+      const currentUserRaw = localStorage.getItem("mediflow_current_user") || "{}";
+      let currentUser: any = {};
+      try {
+        currentUser = JSON.parse(currentUserRaw);
+      } catch {
+        currentUser = {};
+      }
 
-    const allPrescriptions = safeParseArray<any>("mediflow_prescriptions");
+      const allFamily = safeParseArray<any>("mediflow_family_members");
+      const memberNames = allFamily
+        .filter((m) => m.userId === currentUser.email)
+        .map((m) => String(m.name || "").toLowerCase());
 
-    const normalized: PrescriptionRecord[] = allPrescriptions
-      .filter((rx) => memberNames.includes(String(rx?.patientName || "").toLowerCase()))
-      .map((rx, index) => ({
-        id: String(rx?.id || `RX-${index + 1}`),
-        patientName: String(rx?.patientName || "Unknown Patient"),
-        doctorName: String(rx?.doctorName || "Unknown Doctor"),
-        doctorSpecialization: String(rx?.doctorSpecialization || "General"),
-        date: String(rx?.date || "No date"),
-        notes: String(rx?.notes || "No clinical notes."),
-        medications: Array.isArray(rx?.medications) ? rx.medications : [],
-      }));
+      if (memberNames.length === 0 && currentUser.firstName) {
+        memberNames.push(String(currentUser.firstName).toLowerCase());
+      }
 
-    setReports(normalized);
+      const allPrescriptions = safeParseArray<any>("mediflow_prescriptions");
+
+      const normalized: PrescriptionRecord[] = allPrescriptions
+        .filter((rx) => memberNames.includes(String(rx?.patientName || "").toLowerCase()))
+        .map((rx, index) => ({
+          id: String(rx?.id || `RX-${index + 1}`),
+          patientName: String(rx?.patientName || "Unknown Patient"),
+          doctorName: String(rx?.doctorName || "Unknown Doctor"),
+          doctorSpecialization: String(rx?.doctorSpecialization || "General"),
+          date: String(rx?.date || "No date"),
+          notes: String(rx?.notes || "No clinical notes."),
+          medications: Array.isArray(rx?.medications) ? rx.medications : [],
+        }));
+
+      if (!cancelled) {
+        setReports(normalized);
+        setSyncing(false);
+      }
+    };
+
+    loadReports();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredReports = useMemo(() => {
@@ -187,7 +209,7 @@ export default function PatientMedicationReportPage() {
           <CardContent className="space-y-3">
             {filteredReports.length === 0 ? (
               <div className="p-10 border-2 border-dashed rounded-2xl text-center text-muted-foreground">
-                No medication reports found.
+                {syncing ? "Syncing cloud records..." : "No medication reports found."}
               </div>
             ) : (
               filteredReports.map((report) => (
