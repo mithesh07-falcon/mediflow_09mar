@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useEffect, useState } from "react";
+import { isGuardianLinkedToAnyElderly } from "@/lib/guardian-access";
 
 export function SidebarNav({ role }: { role: "patient" | "doctor" | "pharmacist" | "admin" }) {
   const pathname = usePathname();
@@ -39,20 +40,29 @@ export function SidebarNav({ role }: { role: "patient" | "doctor" | "pharmacist"
   const [showGuardianMonitoring, setShowGuardianMonitoring] = useState(false);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-    setIsElderly(user.isElderly || false);
-    setCurrentUserRole(user.role || "");
+    const refreshGuardianAccess = () => {
+      const user = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
+      setIsElderly(user.isElderly || false);
+      setCurrentUserRole(user.role || "");
 
-    // Check for linked elderly
-    const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
-    if (user.email) {
-      const isGuardian = allUsers.some((u: any) =>
-        u.isElderly &&
-        u.guardianEmail &&
-        u.guardianEmail.toLowerCase() === user.email.toLowerCase()
-      );
+      const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+      if (!user.email) {
+        setShowGuardianMonitoring(false);
+        return;
+      }
+
+      const isGuardian = isGuardianLinkedToAnyElderly(user.email, allUsers);
       setShowGuardianMonitoring(isGuardian);
-    }
+    };
+
+    refreshGuardianAccess();
+    window.addEventListener("storage", refreshGuardianAccess);
+    window.addEventListener("focus", refreshGuardianAccess);
+
+    return () => {
+      window.removeEventListener("storage", refreshGuardianAccess);
+      window.removeEventListener("focus", refreshGuardianAccess);
+    };
   }, []);
 
   const handleSignOut = () => {
@@ -67,13 +77,17 @@ export function SidebarNav({ role }: { role: "patient" | "doctor" | "pharmacist"
   const patientNav = [
     { label: "Overview", href: "/dashboard/patient", icon: Home },
     { label: "Family Profiles", href: "/dashboard/patient/family", icon: Users },
-    // Only show Guardian view if they actually have a linked elder
-    ...(showGuardianMonitoring ? [{ label: "Guardian Monitoring", href: "/dashboard/guardian", icon: ShieldCheck }] : []),
+    // Show only when the patient's email is linked by an elderly profile.
+    ...(showGuardianMonitoring
+      ? [
+          { label: "Guardian Monitoring", href: "/dashboard/guardian", icon: ShieldCheck },
+          { label: "Family Wallet", href: "/dashboard/patient/wallet", icon: Wallet },
+        ]
+      : []),
     { label: "Book Appointment", href: "/dashboard/patient/appointments", icon: Calendar },
     { label: "My Schedule", href: "/dashboard/patient/my-schedule", icon: ClipboardList },
     { label: "Medication", href: "/dashboard/patient/meds", icon: Pill },
     { label: "Medication Report", href: "/dashboard/patient/medication-report", icon: FileText },
-    { label: "Family Wallet", href: "/dashboard/patient/wallet", icon: Wallet },
     { label: "Billing", href: "/dashboard/patient/billing", icon: CreditCard },
   ];
 

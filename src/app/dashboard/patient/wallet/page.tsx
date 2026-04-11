@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { SidebarNav } from "@/components/layout/SidebarNav";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { isGuardianLinkedToAnyElderly } from "@/lib/guardian-access";
 
 function safeJsonParse<T>(raw: string | null, fallback: T): T {
     if (!raw) return fallback;
@@ -18,18 +19,6 @@ function safeJsonParse<T>(raw: string | null, fallback: T): T {
     } catch {
         return fallback;
     }
-}
-
-function isElderlyFamilyMember(member: any): boolean {
-    const relation = String(member?.relation || "").toLowerCase();
-    const ageValue = Number.parseInt(String(member?.age || ""), 10);
-    const hasElderlyRelation =
-        relation.includes("elder") ||
-        relation.includes("grand") ||
-        relation === "father" ||
-        relation === "mother";
-
-    return hasElderlyRelation || (Number.isFinite(ageValue) && ageValue >= 60);
 }
 
 function getSafeWalletBalance(rawBalance: string | null): number {
@@ -43,71 +32,101 @@ function getSafeWalletBalance(rawBalance: string | null): number {
 export default function FamilyWalletPage() {
   const router = useRouter();
   const { toast } = useToast();
+    const rechargeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [balance, setBalance] = useState(5000); // Default shared balance
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [user, setUser] = useState<any>(null);
-    const [hasElderlyMember, setHasElderlyMember] = useState(false);
+    const [hasLinkedElderly, setHasLinkedElderly] = useState(false);
     const [isPageReady, setIsPageReady] = useState(false);
 
   const [showSuccess, setShowSuccess] = useState(false);
 
-  useEffect(() => {
+    useEffect(() => {
         const savedUser = safeJsonParse<any>(localStorage.getItem("mediflow_current_user"), null);
         if (!savedUser?.email) {
             router.replace("/login");
             return;
         }
 
-    setUser(savedUser);
+        setUser(savedUser);
 
-        const savedMembers = safeJsonParse<any[]>(localStorage.getItem("mediflow_family_members"), []);
-        const userMembers = savedMembers.filter((m: any) => m?.userId === savedUser.email);
-        const hasEligibleMember = userMembers.some(isElderlyFamilyMember);
-        setHasElderlyMember(hasEligibleMember);
-    
+        const allPatients = safeJsonParse<any[]>(localStorage.getItem("mediflow_patients"), []);
+        const linked = isGuardianLinkedToAnyElderly(savedUser.email, allPatients);
+        setHasLinkedElderly(linked);
+
         const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
         setBalance(getSafeWalletBalance(savedBalance));
         setIsPageReady(true);
-  }, [router]);
 
-  const handleAddMoney = () => {
-        if (!hasElderlyMember) {
+        if (!linked) {
             toast({
                 variant: "destructive",
-                title: "Add an Elderly Member First",
-                description: "Create an elderly family profile before recharging the Family Wallet.",
+                title: "Family Wallet Not Available",
+                description: "This option is enabled only for patient emails linked in Elder Portal.",
+            });
+            router.replace("/dashboard/patient");
+        }
+    }, [router, toast]);
+
+    useEffect(() => {
+        return () => {
+            if (rechargeTimeoutRef.current) {
+                clearTimeout(rechargeTimeoutRef.current);
+            }
+        };
+    }, []);
+
+  const handleAddMoney = () => {
+        if (!hasLinkedElderly) {
+            toast({
+                variant: "destructive",
+                title: "Family Wallet Not Available",
+                description: "This option is enabled only for linked guardian-patient emails.",
             });
             return;
         }
 
-    const numAmount = parseInt(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
+        if (!paymentMethod) {
+            toast({ variant: "destructive", title: "Select Payment Method", description: "Please select UPI, Card, or Banking." });
+            return;
+        }
+
+        const numAmount = Number(amount);
+        if (!Number.isFinite(numAmount) || numAmount <= 0 || !Number.isInteger(numAmount)) {
       toast({ variant: "destructive", title: "Invalid Amount", description: "Please enter a valid amount." });
       return;
     }
 
+        if (numAmount > 500000) {
+            toast({ variant: "destructive", title: "Amount Too Large", description: "Please recharge up to ₹500000 at a time." });
+            return;
+        }
+
     setIsProcessing(true);
-    // Simulate payment gateway delay
-    setTimeout(() => {
-            let newBalance = 0;
-            setBalance((prev) => {
-                const safePrev = Number.isFinite(prev) ? prev : 0;
-                newBalance = safePrev + numAmount;
+        rechargeTimeoutRef.current = setTimeout(() => {
+            try {
+                const newBalance = balance + numAmount;
+                setBalance(newBalance);
                 localStorage.setItem("mediflow_family_wallet_balance", newBalance.toString());
-                return newBalance;
-            });
-      
-      // Update the sync-service if needed, but for now we use localStorage as source of truth
-      toast({
-        title: "Recharge Successful! 🎉",
-        description: `₹${numAmount} added to the Elder's Family Wallet. Their medicine and bills will be auto-paid.`,
-      });
-      // setAmount(""); // Don't clear yet if we show success screen
-      setIsProcessing(false);
-      setShowSuccess(true);
-    }, 1500);
+
+                toast({
+                    title: "Recharge Successful! 🎉",
+                    description: `₹${numAmount} added to the Elder's Family Wallet. Their medicine and bills will be auto-paid.`,
+                });
+
+                setIsProcessing(false);
+                setShowSuccess(true);
+            } catch {
+                setIsProcessing(false);
+                toast({
+                    variant: "destructive",
+                    title: "Recharge Failed",
+                    description: "Unable to save wallet update. Please try again.",
+                });
+            }
+        }, 900);
   };
 
     if (!isPageReady) {
@@ -118,7 +137,15 @@ export default function FamilyWalletPage() {
         );
     }
 
-  if (showSuccess) {
+    if (isPageReady && !hasLinkedElderly) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <p className="text-sm font-bold uppercase tracking-wide text-slate-500">Redirecting to Patient Dashboard...</p>
+            </div>
+        );
+    }
+
+    if (showSuccess) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
         <Card className="max-w-xl w-full rounded-[4rem] border-none shadow-2xl bg-white p-2">
@@ -171,7 +198,7 @@ export default function FamilyWalletPage() {
           <p className="text-xl text-slate-500 font-medium">Manage the shared funds for your elderly family members.</p>
         </header>
 
-                {!hasElderlyMember && (
+                {!hasLinkedElderly && (
                     <Card className="rounded-[2rem] border-amber-200 bg-amber-50 mb-8">
                         <CardContent className="p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                             <div>
@@ -242,7 +269,7 @@ export default function FamilyWalletPage() {
                             className="h-24 text-5xl font-black rounded-3xl border-slate-200 focus:border-primary px-8"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
-                            disabled={!hasElderlyMember}
+                            disabled={!hasLinkedElderly}
                         />
                     </div>
 
@@ -253,7 +280,7 @@ export default function FamilyWalletPage() {
                                 variant="outline"
                                 className="h-16 rounded-2xl text-xl font-bold border-2 hover:bg-slate-50 transition-all hover:border-black"
                                 onClick={() => setAmount(val.toString())}
-                                disabled={!hasElderlyMember}
+                                disabled={!hasLinkedElderly}
                             >
                                 +₹{val}
                             </Button>
@@ -272,7 +299,7 @@ export default function FamilyWalletPage() {
                                         paymentMethod === method ? "bg-black text-white border-black" : "border-slate-200"
                                     )}
                                     onClick={() => setPaymentMethod(method)}
-                                    disabled={!hasElderlyMember}
+                                    disabled={!hasLinkedElderly}
                                 >
                                     {method}
                                 </Button>
@@ -283,7 +310,7 @@ export default function FamilyWalletPage() {
                     <Button 
                         className="w-full h-24 text-3xl font-black rounded-[2rem] shadow-xl shadow-primary/20 flex items-center justify-center gap-4 transition-all active:scale-95 bg-primary hover:bg-primary/90"
                         onClick={handleAddMoney}
-                        disabled={isProcessing || !amount || !paymentMethod || !hasElderlyMember}
+                        disabled={isProcessing || !amount || !paymentMethod || !hasLinkedElderly}
                     >
                         {isProcessing ? <Loader2 className="h-10 w-10 animate-spin" /> : <><Wallet className="h-8 w-8" /> RECHARGE NOW</>}
                     </Button>

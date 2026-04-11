@@ -25,10 +25,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import Image from "next/image";
+import { useToast } from "@/hooks/use-toast";
+import { findLinkedElderlyForGuardian } from "@/lib/guardian-access";
 
 export default function GuardianDashboard() {
     const router = useRouter();
+    const { toast } = useToast();
     const [elderlyUser, setElderlyUser] = useState<any>(null);
+    const [isLinkCheckComplete, setIsLinkCheckComplete] = useState(false);
     const [healthData, setHealthData] = useState({
         glucose: 142,
         bp: "138/88",
@@ -52,19 +56,24 @@ export default function GuardianDashboard() {
 
     useEffect(() => {
         const currentUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-        const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+        if (!currentUser?.email) {
+            router.replace("/login");
+            return;
+        }
 
-        // Find the elderly patient who listed this user as their guardian
-        const linkedElderly = allUsers.find((u: any) =>
-            u.isElderly &&
-            u.guardianEmail &&
-            u.guardianEmail.toLowerCase() === currentUser.email?.toLowerCase()
-        );
+        const allUsers = JSON.parse(localStorage.getItem("mediflow_patients") || "[]");
+        const linkedElderly = findLinkedElderlyForGuardian(currentUser.email, allUsers);
 
         if (linkedElderly) {
             setElderlyUser(linkedElderly);
         } else {
             setElderlyUser(null);
+            toast({
+                variant: "destructive",
+                title: "Guardian Access Not Active",
+                description: "Guardian Monitoring appears after an elderly user links your patient email.",
+            });
+            router.replace("/dashboard/patient");
         }
 
         const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
@@ -72,7 +81,20 @@ export default function GuardianDashboard() {
 
         const savedNotifications = JSON.parse(localStorage.getItem("mediflow_guardian_notifications") || "[]");
         setNotifications(savedNotifications);
-    }, []);
+        setIsLinkCheckComplete(true);
+    }, [router, toast]);
+
+    if (!isLinkCheckComplete) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="text-sm font-bold text-slate-500 uppercase tracking-wide">Checking guardian link...</div>
+            </div>
+        );
+    }
+
+    if (!elderlyUser) {
+        return null;
+    }
 
     return (
         <div className="flex min-h-screen">
