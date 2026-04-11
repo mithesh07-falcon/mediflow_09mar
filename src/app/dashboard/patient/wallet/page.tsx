@@ -10,6 +10,36 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
+function safeJsonParse<T>(raw: string | null, fallback: T): T {
+    if (!raw) return fallback;
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function isElderlyFamilyMember(member: any): boolean {
+    const relation = String(member?.relation || "").toLowerCase();
+    const ageValue = Number.parseInt(String(member?.age || ""), 10);
+    const hasElderlyRelation =
+        relation.includes("elder") ||
+        relation.includes("grand") ||
+        relation === "father" ||
+        relation === "mother";
+
+    return hasElderlyRelation || (Number.isFinite(ageValue) && ageValue >= 60);
+}
+
+function getSafeWalletBalance(rawBalance: string | null): number {
+    const parsed = Number.parseInt(rawBalance || "", 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        return 5000;
+    }
+    return parsed;
+}
+
 export default function FamilyWalletPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -18,32 +48,40 @@ export default function FamilyWalletPage() {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [user, setUser] = useState<any>(null);
+    const [hasElderlyMember, setHasElderlyMember] = useState(false);
+    const [isPageReady, setIsPageReady] = useState(false);
 
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
-    const savedUser = JSON.parse(localStorage.getItem("mediflow_current_user") || "{}");
-    setUser(savedUser);
-    
-    // SECURITY CHECK: Redirect if not a guardian
-    const savedMembers = JSON.parse(localStorage.getItem("mediflow_family_members") || "[]");
-    const currentEmail = savedUser.email || "default";
-    const userMembers = savedMembers.filter((m: any) => m.userId === currentEmail);
-    const hasElderly = userMembers.some((m: any) => 
-      (m.relation === "Grandpa" || m.relation === "Grandma" || m.relation === "Father" || m.relation === "Mother" || m.relation === "Elderly" || (m.age && parseInt(m.age) >= 60))
-    );
+        const savedUser = safeJsonParse<any>(localStorage.getItem("mediflow_current_user"), null);
+        if (!savedUser?.email) {
+            router.replace("/login");
+            return;
+        }
 
-    if (!hasElderly) {
-      router.push("/dashboard/patient");
-      return;
-    }
+    setUser(savedUser);
+
+        const savedMembers = safeJsonParse<any[]>(localStorage.getItem("mediflow_family_members"), []);
+        const userMembers = savedMembers.filter((m: any) => m?.userId === savedUser.email);
+        const hasEligibleMember = userMembers.some(isElderlyFamilyMember);
+        setHasElderlyMember(hasEligibleMember);
     
-    // Simulate fetching actual shared wallet balance
-    const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
-    if (savedBalance) setBalance(parseInt(savedBalance));
+        const savedBalance = localStorage.getItem("mediflow_family_wallet_balance");
+        setBalance(getSafeWalletBalance(savedBalance));
+        setIsPageReady(true);
   }, [router]);
 
   const handleAddMoney = () => {
+        if (!hasElderlyMember) {
+            toast({
+                variant: "destructive",
+                title: "Add an Elderly Member First",
+                description: "Create an elderly family profile before recharging the Family Wallet.",
+            });
+            return;
+        }
+
     const numAmount = parseInt(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       toast({ variant: "destructive", title: "Invalid Amount", description: "Please enter a valid amount." });
@@ -53,9 +91,13 @@ export default function FamilyWalletPage() {
     setIsProcessing(true);
     // Simulate payment gateway delay
     setTimeout(() => {
-      const newBalance = balance + numAmount;
-      setBalance(newBalance);
-      localStorage.setItem("mediflow_family_wallet_balance", newBalance.toString());
+            let newBalance = 0;
+            setBalance((prev) => {
+                const safePrev = Number.isFinite(prev) ? prev : 0;
+                newBalance = safePrev + numAmount;
+                localStorage.setItem("mediflow_family_wallet_balance", newBalance.toString());
+                return newBalance;
+            });
       
       // Update the sync-service if needed, but for now we use localStorage as source of truth
       toast({
@@ -67,6 +109,14 @@ export default function FamilyWalletPage() {
       setShowSuccess(true);
     }, 1500);
   };
+
+    if (!isPageReady) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            </div>
+        );
+    }
 
   if (showSuccess) {
     return (
@@ -120,6 +170,20 @@ export default function FamilyWalletPage() {
           <h1 className="text-5xl font-black text-slate-900 uppercase tracking-tighter mb-2">Elderly Care Wallet</h1>
           <p className="text-xl text-slate-500 font-medium">Manage the shared funds for your elderly family members.</p>
         </header>
+
+                {!hasElderlyMember && (
+                    <Card className="rounded-[2rem] border-amber-200 bg-amber-50 mb-8">
+                        <CardContent className="p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div>
+                                <h2 className="text-xl font-black text-amber-800">No Elderly Family Profile Found</h2>
+                                <p className="text-amber-700 font-medium">Add a parent, grandparent, or elderly member in Family Profiles to activate wallet recharges.</p>
+                            </div>
+                            <Button onClick={() => router.push('/dashboard/patient/family')} className="h-12 px-6 text-base font-bold">
+                                Go to Family Profiles
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           {/* Main Wallet Card */}
@@ -178,6 +242,7 @@ export default function FamilyWalletPage() {
                             className="h-24 text-5xl font-black rounded-3xl border-slate-200 focus:border-primary px-8"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
+                            disabled={!hasElderlyMember}
                         />
                     </div>
 
@@ -188,6 +253,7 @@ export default function FamilyWalletPage() {
                                 variant="outline"
                                 className="h-16 rounded-2xl text-xl font-bold border-2 hover:bg-slate-50 transition-all hover:border-black"
                                 onClick={() => setAmount(val.toString())}
+                                disabled={!hasElderlyMember}
                             >
                                 +₹{val}
                             </Button>
@@ -206,6 +272,7 @@ export default function FamilyWalletPage() {
                                         paymentMethod === method ? "bg-black text-white border-black" : "border-slate-200"
                                     )}
                                     onClick={() => setPaymentMethod(method)}
+                                    disabled={!hasElderlyMember}
                                 >
                                     {method}
                                 </Button>
@@ -216,7 +283,7 @@ export default function FamilyWalletPage() {
                     <Button 
                         className="w-full h-24 text-3xl font-black rounded-[2rem] shadow-xl shadow-primary/20 flex items-center justify-center gap-4 transition-all active:scale-95 bg-primary hover:bg-primary/90"
                         onClick={handleAddMoney}
-                        disabled={isProcessing || !amount || !paymentMethod}
+                        disabled={isProcessing || !amount || !paymentMethod || !hasElderlyMember}
                     >
                         {isProcessing ? <Loader2 className="h-10 w-10 animate-spin" /> : <><Wallet className="h-8 w-8" /> RECHARGE NOW</>}
                     </Button>
