@@ -11,6 +11,15 @@ import path from "path";
 
 const APPOINTMENTS_DB_PATH = path.join(process.cwd(), "data", "appointments.json");
 
+function safeParseAppointments(raw: string): any[] {
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
 // Ensure data directory and file exist
 async function ensureRegistry() {
     const dir = path.dirname(APPOINTMENTS_DB_PATH);
@@ -60,8 +69,16 @@ export async function GET(request: Request) {
         }
 
         await ensureRegistry();
-        const fileContent = await fs.readFile(APPOINTMENTS_DB_PATH, "utf-8");
-        const allAppointments = JSON.parse(fileContent);
+
+        let allAppointments: any[] = [];
+        try {
+            const fileContent = await fs.readFile(APPOINTMENTS_DB_PATH, "utf-8");
+            allAppointments = safeParseAppointments(fileContent);
+        } catch {
+            // In local/dev or read-only environments, fallback to empty registry.
+            allAppointments = [];
+        }
+
         let isolatedData = [];
 
         // Apply Row-Level Security (RLS) Query Filtering
@@ -102,8 +119,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Missing clinical consultation data." }, { status: 400 });
         }
 
-        const fileContent = await fs.readFile(APPOINTMENTS_DB_PATH, "utf-8");
-        const appointments = JSON.parse(fileContent);
+        let appointments: any[] = [];
+        try {
+            const fileContent = await fs.readFile(APPOINTMENTS_DB_PATH, "utf-8");
+            appointments = safeParseAppointments(fileContent);
+        } catch {
+            appointments = [];
+        }
 
         // Security check: Force the appointment's patientEmail to match the authenticated user's token
         if (appointment.patientEmail?.toLowerCase() !== user.email?.toLowerCase()) {

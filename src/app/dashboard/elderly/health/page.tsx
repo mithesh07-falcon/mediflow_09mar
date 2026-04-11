@@ -86,7 +86,7 @@ export default function ElderlyHealthTrackingPage() {
 
   useEffect(() => {
     const savedReadings = loadHealthReadings();
-    const initialReadings =
+    const initialReadings: ElderlyHealthReading[] =
       savedReadings.length > 0
         ? savedReadings
         : [

@@ -12,6 +12,15 @@ const STAFF_URL = "https://rentry.co/api/edit/mediflow-staff-777";
 const PATIENT_URL = "https://rentry.co/api/edit/mediflow-patients-777";
 const EDIT_CODE = "mediflow2026";
 
+const APPOINTMENTS_PUSH_URL = "https://rentry.co/api/edit/9gvymvvp2";
+const APPOINTMENTS_PULL_URL = "https://rentry.co/9gvymvvp2/raw";
+
+function isLocalDevelopmentRuntime() {
+    if (typeof window === "undefined") return false;
+    const host = window.location.hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 export const GlobalSync = {
     /**
      * Push STAFF registry from local storage to cloud
@@ -117,8 +126,11 @@ export const GlobalSync = {
      */
     async pushAppointments() {
         try {
+            // This endpoint is intermittently unavailable in local development and can spam 404s in DevTools.
+            if (isLocalDevelopmentRuntime()) return false;
+
             const data = localStorage.getItem("mediflow_appointments") || "[]";
-            const res = await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/api/edit/9gvymvvp2")}`, {
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent(APPOINTMENTS_PUSH_URL)}`, {
                 method: "POST",
                 body: new URLSearchParams({
                     text: data,
@@ -137,7 +149,10 @@ export const GlobalSync = {
      */
     async pullAppointments() {
         try {
-            const res = await fetch(`/api/proxy?url=${encodeURIComponent("https://rentry.co/9gvymvvp2/raw")}`);
+            // This endpoint is intermittently unavailable in local development and can spam 404s in DevTools.
+            if (isLocalDevelopmentRuntime()) return false;
+
+            const res = await fetch(`/api/proxy?url=${encodeURIComponent(APPOINTMENTS_PULL_URL)}`);
             if (res.ok) {
                 const cloudData = await res.text();
                 if (cloudData && cloudData !== "[]" && cloudData.trim().startsWith('[')) {
