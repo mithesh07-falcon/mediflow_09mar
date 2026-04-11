@@ -11,6 +11,7 @@ import { Activity, Stethoscope, ClipboardList, User, Heart, Phone, Mail, Loader2
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -312,6 +313,11 @@ export default function LoginPage() {
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </button>
                         </div>
+                      </div>
+                      <div className="text-right">
+                        <Link href="/login/forgot-password" className="text-sm font-semibold text-primary hover:underline">
+                          Forgot Password?
+                        </Link>
                       </div>
                       <Button className="w-full py-6 text-lg" disabled={loading}>
                         {loading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}

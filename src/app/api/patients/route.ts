@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import {
+    OTP_RESEND_COOLDOWN_MS,
+    completePasswordResetSession,
+    compareBcryptSecret,
+    hashBcryptSecret,
+    isSecureTransport,
+    issuePasswordResetOtp,
+    normalizeIndianMobile,
+    sendPasswordResetOtpSms,
+    validatePasswordResetToken,
+    verifyPasswordResetOtp,
+} from "@/lib/patient-password-reset";
 
 // ═══════════════════════════════════════════════════════════════════════
 // MEDIFLOW — PATIENT REGISTRY (Server-Side Persistent Storage)
@@ -15,7 +27,9 @@ export interface PatientRecord {
     email: string;
     phone: string;
     age: string;
-    password: string;
+    password?: string;
+    passwordHash?: string;
+    passwordUpdatedAt?: string;
     registeredAt: string;
     guardianName?: string;
     guardianEmail?: string;
@@ -94,7 +108,7 @@ function writePatients(patients: PatientRecord[]) {
 
 export async function GET() {
     const patients = readPatients();
-    const safe = patients.map(({ password, ...p }) => p);
+    const safe = patients.map(({ password, passwordHash, ...p }) => p);
     return NextResponse.json({ patients: safe });
 }
 
@@ -104,6 +118,18 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { action } = body;
+        const genericOtpMessage = "If the number is registered, you will receive an OTP";
+        const buildGenericOtpResponse = (resendAvailableInSeconds: number = Math.floor(OTP_RESEND_COOLDOWN_MS / 1000)) =>
+            NextResponse.json({
+                success: true,
+                message: genericOtpMessage,
+                resendAvailableInSeconds,
+            });
+
+        const findPatientByNormalizedPhone = (mobile: string) => {
+            const patients = readPatients();
+            return patients.find((patient) => normalizeIndianMobile(patient.phone) === mobile);
+        };
 
         // ─── LOGIN ───
         if (action === "login") {
@@ -118,10 +144,7 @@ export async function POST(request: Request) {
             }
 
             const patients = readPatients();
-            const patient = patients.find(
-                (p) =>
-                    p.email.toLowerCase() === email.toLowerCase() && p.password === password
-            );
+            const patient = patients.find((p) => p.email.toLowerCase() === email.toLowerCase());
 
             if (!patient) {
                 console.warn(`[API:Patients:Login] Failed login for: ${email}`);
@@ -131,8 +154,32 @@ export async function POST(request: Request) {
                 );
             }
 
+            let matchesPassword = false;
+            if (patient.passwordHash) {
+                matchesPassword = await compareBcryptSecret(password, patient.passwordHash);
+            }
+            if (!matchesPassword && patient.password) {
+                matchesPassword = patient.password === password;
+            }
+
+            if (!matchesPassword) {
+                console.warn(`[API:Patients:Login] Failed login for: ${email}`);
+                return NextResponse.json(
+                    { error: "Invalid email or password. Please check your credentials." },
+                    { status: 401 }
+                );
+            }
+
+            // Security hardening: migrate legacy plaintext records to bcrypt on successful login.
+            if (!patient.passwordHash && patient.password) {
+                patient.passwordHash = await hashBcryptSecret(patient.password);
+                delete patient.password;
+                patient.passwordUpdatedAt = new Date().toISOString();
+                writePatients(patients);
+            }
+
             console.log(`[API:Patients:Login] Success for: ${email}`);
-            const { password: _, ...safePatient } = patient;
+            const { password: _, passwordHash: __, ...safePatient } = patient;
             return NextResponse.json({ success: true, patient: safePatient });
         }
 
@@ -174,6 +221,151 @@ export async function POST(request: Request) {
                     name: `${guardian.firstName} ${guardian.lastName}`,
                     phone: guardian.phone
                 }
+            });
+        }
+
+        // ─── FORGOT PASSWORD: REQUEST / RESEND OTP ───
+        if (action === "request-password-reset-otp" || action === "resend-password-reset-otp") {
+            if (!isSecureTransport(request)) {
+                return NextResponse.json(
+                    { error: "Secure HTTPS connection is required for password reset." },
+                    { status: 400 }
+                );
+            }
+
+            const mobileRaw = typeof body.mobile === "string" ? body.mobile : "";
+            const normalizedMobile = normalizeIndianMobile(mobileRaw);
+
+            if (!normalizedMobile) {
+                return NextResponse.json(
+                    { error: "Enter a valid Indian mobile number in +91 format." },
+                    { status: 400 }
+                );
+            }
+
+            const patient = findPatientByNormalizedPhone(normalizedMobile);
+            if (!patient) {
+                return buildGenericOtpResponse();
+            }
+
+            const otpIssue = await issuePasswordResetOtp(normalizedMobile);
+            if (!otpIssue.blocked && otpIssue.otp) {
+                await sendPasswordResetOtpSms(normalizedMobile, otpIssue.otp);
+            }
+
+            const cooldown = otpIssue.blocked
+                ? otpIssue.cooldownRemainingSeconds
+                : otpIssue.cooldownSeconds;
+
+            return buildGenericOtpResponse(cooldown);
+        }
+
+        // ─── FORGOT PASSWORD: VERIFY OTP ───
+        if (action === "verify-password-reset-otp") {
+            if (!isSecureTransport(request)) {
+                return NextResponse.json(
+                    { error: "Secure HTTPS connection is required for password reset." },
+                    { status: 400 }
+                );
+            }
+
+            const mobileRaw = typeof body.mobile === "string" ? body.mobile : "";
+            const otpRaw = typeof body.otp === "string" ? body.otp.trim() : "";
+            const normalizedMobile = normalizeIndianMobile(mobileRaw);
+
+            if (!normalizedMobile || !/^\d{6}$/.test(otpRaw)) {
+                return NextResponse.json(
+                    { error: "Enter a valid mobile number and 6-digit OTP." },
+                    { status: 400 }
+                );
+            }
+
+            const verification = await verifyPasswordResetOtp(normalizedMobile, otpRaw);
+            if (!verification.success) {
+                if (verification.code === "attempts_exceeded") {
+                    return NextResponse.json(
+                        { error: "Maximum OTP attempts reached. Request a new OTP." },
+                        { status: 429 }
+                    );
+                }
+
+                return NextResponse.json(
+                    { error: "Invalid or expired OTP." },
+                    { status: 400 }
+                );
+            }
+
+            return NextResponse.json({
+                success: true,
+                resetToken: verification.resetToken,
+                resetTokenExpiresInSeconds: verification.resetTokenExpiresInSeconds,
+            });
+        }
+
+        // ─── FORGOT PASSWORD: RESET PASSWORD ───
+        if (action === "reset-password-with-otp") {
+            if (!isSecureTransport(request)) {
+                return NextResponse.json(
+                    { error: "Secure HTTPS connection is required for password reset." },
+                    { status: 400 }
+                );
+            }
+
+            const resetToken = typeof body.resetToken === "string" ? body.resetToken.trim() : "";
+            const password = typeof body.password === "string" ? body.password : "";
+            const confirmPassword = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
+
+            if (!resetToken || !password || !confirmPassword) {
+                return NextResponse.json(
+                    { error: "Reset token, password, and confirm password are required." },
+                    { status: 400 }
+                );
+            }
+
+            if (password !== confirmPassword) {
+                return NextResponse.json(
+                    { error: "Password and confirm password do not match." },
+                    { status: 400 }
+                );
+            }
+
+            if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+                return NextResponse.json(
+                    { error: "Password must contain at least 8 characters with one uppercase, one lowercase, one number, and one special character." },
+                    { status: 400 }
+                );
+            }
+
+            const resetSession = validatePasswordResetToken(resetToken);
+            if (!resetSession.success) {
+                return NextResponse.json(
+                    { error: "Invalid or expired reset session. Please verify OTP again." },
+                    { status: 400 }
+                );
+            }
+
+            const patients = readPatients();
+            const patient = patients.find((record) => normalizeIndianMobile(record.phone) === resetSession.mobile);
+
+            if (!patient) {
+                return NextResponse.json(
+                    { error: "Reset session is no longer valid." },
+                    { status: 400 }
+                );
+            }
+
+            patient.passwordHash = await hashBcryptSecret(password);
+            delete patient.password;
+            patient.passwordUpdatedAt = new Date().toISOString();
+            writePatients(patients);
+            completePasswordResetSession(resetSession.recordId);
+
+            const { password: _, passwordHash: __, ...safePatient } = patient;
+
+            return NextResponse.json({
+                success: true,
+                message: "Password has been reset successfully.",
+                patient: safePatient,
             });
         }
 
@@ -295,6 +487,7 @@ export async function POST(request: Request) {
             }
 
             const userType = user_type || (parseInt(age) >= 60 ? 'elderly' : 'normal');
+            const passwordHash = await hashBcryptSecret(password);
 
             const newPatient: PatientRecord = {
                 id: Date.now(),
@@ -303,7 +496,8 @@ export async function POST(request: Request) {
                 email: emailLower,
                 phone: phoneClean,
                 age,
-                password,
+                passwordHash,
+                passwordUpdatedAt: new Date().toISOString(),
                 registeredAt: new Date().toISOString(),
                 guardianName,
                 guardianPhone,
@@ -316,11 +510,11 @@ export async function POST(request: Request) {
             writePatients(localPatients);
             console.log(`[API:Patients:Register] Successfully registered: ${emailLower}`);
 
-            const { password: _, ...safePatient } = newPatient;
+            const { password: _, passwordHash: __, ...safePatient } = newPatient;
             return NextResponse.json({ success: true, patient: safePatient });
         }
 
-        return NextResponse.json({ error: "Invalid action. Use 'login' or 'register'." }, { status: 400 });
+        return NextResponse.json({ error: "Invalid action." }, { status: 400 });
     } catch (err: any) {
         console.error("[API:Patients] Fatal Error:", err);
 
